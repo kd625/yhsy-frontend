@@ -10,7 +10,7 @@
       <el-form
         ref="loginFormRef"
         :model="loginForm"
-        :rules="loginRules"
+        :rules="rules"
         label-width="0"
         size="large"
       >
@@ -76,10 +76,11 @@ const loginForm = reactive<UserLoginRequest>({
 })
 
 // 表单验证规则
-const loginRules: FormRules = {
+const rules: FormRules<UserLoginRequest> = {
   userAccount: [
     { required: true, message: '请输入账号', trigger: 'blur' },
-    { min: 4, max: 16, message: '账号长度为4-16位', trigger: 'blur' }
+    { min: 4, max: 16, message: '账号长度为4-16位', trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9_]+$/, message: '账号只能包含字母、数字和下划线', trigger: 'blur' }
   ],
   userPassword: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -92,41 +93,35 @@ const handleLogin = async () => {
   if (!loginFormRef.value) return
   
   try {
-    await loginFormRef.value.validate()
+    const valid = await loginFormRef.value.validate()
+    if (!valid) return
+    
     loading.value = true
     
-    // TODO: 调用登录API
-    // const response = await loginApi(loginForm)
-    // userStore.login(response.data)
+    // 调用API登录
+    const result = await userStore.login(loginForm)
     
-    // 模拟登录成功
-    setTimeout(() => {
-      const mockUserInfo = {
-        id: 1,
-        userName: '测试用户',
-        userAccount: loginForm.userAccount,
-        userAvatar: '',
-        gender: 0,
-        userRole: 'user',
-        createTime: new Date().toISOString(),
-        updateTime: new Date().toISOString()
-      }
-      const mockToken = 'mock-token-' + Date.now()
-      
-      userStore.login(mockUserInfo, mockToken)
-      
+    if (result.success) {
       ElMessage.success('登录成功')
-      
       // 跳转到原来要访问的页面或首页
       const redirect = route.query.redirect as string
       router.push(redirect || '/')
-      
-      loading.value = false
-    }, 1000)
+    } else {
+      ElMessage.error(result.message || '登录失败')
+    }
     
   } catch (error) {
-    loading.value = false
     console.error('登录失败:', error)
+    ElMessage.error('登录失败，请重试')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 重置表单
+const resetForm = () => {
+  if (loginFormRef.value) {
+    loginFormRef.value.resetFields()
   }
 }
 </script>

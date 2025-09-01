@@ -76,15 +76,15 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { useUserStore } from '@/store/modules/user'
+import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import type { UserRegisterRequest } from '@/types/user'
 
 const router = useRouter()
+const userStore = useUserStore()
 
-const registerFormRef = ref<FormInstance>()
-const loading = ref(false)
-
-// 注册表单数据
+// 表单数据
 const registerForm = reactive<UserRegisterRequest>({
   userName: '',
   userAccount: '',
@@ -92,8 +92,14 @@ const registerForm = reactive<UserRegisterRequest>({
   checkPassword: ''
 })
 
+// 表单引用
+const registerFormRef = ref<FormInstance>()
+
+// 加载状态
+const loading = ref(false)
+
 // 确认密码验证
-const validateCheckPassword = (rule: any, value: any, callback: any) => {
+const validatePassword = (rule: any, value: any, callback: any) => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== registerForm.userPassword) {
@@ -103,11 +109,34 @@ const validateCheckPassword = (rule: any, value: any, callback: any) => {
   }
 }
 
+// 用户名验证
+const validateUserName = (rule: any, value: any, callback: any) => {
+  if (value === '') {
+    callback(new Error('请输入用户名'))
+  } else if (!/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(value)) {
+    callback(new Error('用户名只能包含中文、字母、数字和下划线'))
+  } else {
+    callback()
+  }
+}
+
+// 密码强度验证
+const validatePasswordStrength = (rule: any, value: any, callback: any) => {
+  if (value === '') {
+    callback(new Error('请输入密码'))
+  } else if (!/^(?=.*[a-zA-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,16}$/.test(value)) {
+    callback(new Error('密码必须包含字母和数字，长度8-16位'))
+  } else {
+    callback()
+  }
+}
+
 // 表单验证规则
-const registerRules: FormRules = {
+const registerRules: FormRules<UserRegisterRequest> = {
   userName: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 2, max: 20, message: '用户名长度为2-20位', trigger: 'blur' }
+    { min: 2, max: 10, message: '用户名长度为2-10位', trigger: 'blur' },
+    { validator: validateUserName, trigger: 'blur' }
   ],
   userAccount: [
     { required: true, message: '请输入账号', trigger: 'blur' },
@@ -116,35 +145,47 @@ const registerRules: FormRules = {
   ],
   userPassword: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 8, max: 20, message: '密码长度为8-20位', trigger: 'blur' }
+    { min: 8, max: 16, message: '密码长度为8-16位', trigger: 'blur' },
+    { validator: validatePasswordStrength, trigger: 'blur' }
   ],
   checkPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
-    { validator: validateCheckPassword, trigger: 'blur' }
+    { validator: validatePassword, trigger: 'blur' }
   ]
 }
 
-// 处理注册
+// 注册处理
 const handleRegister = async () => {
   if (!registerFormRef.value) return
   
   try {
-    await registerFormRef.value.validate()
+    const valid = await registerFormRef.value.validate()
+    if (!valid) return
+    
     loading.value = true
     
-    // TODO: 调用注册API
-    // const response = await registerApi(registerForm)
+    // 调用API注册
+    const result = await userStore.register(registerForm)
     
-    // 模拟注册成功
-    setTimeout(() => {
+    if (result.success) {
       ElMessage.success('注册成功，请登录')
       router.push('/login')
-      loading.value = false
-    }, 1000)
+    } else {
+      ElMessage.error(result.message || '注册失败')
+    }
     
   } catch (error) {
-    loading.value = false
     console.error('注册失败:', error)
+    ElMessage.error('注册失败，请重试')
+  } finally {
+    loading.value = false
+  }
+}
+
+// 重置表单
+const resetForm = () => {
+  if (registerFormRef.value) {
+    registerFormRef.value.resetFields()
   }
 }
 </script>

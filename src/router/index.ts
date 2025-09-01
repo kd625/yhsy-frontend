@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
+import { ElMessage } from 'element-plus'
 
 // 路由配置
 const routes: RouteRecordRaw[] = [
@@ -131,20 +132,29 @@ const router = createRouter({
   }
 })
 
-// 全局前置守卫
-router.beforeEach((to, from, next) => {
+// 路由守卫
+router.beforeEach(async (to, from, next) => {
   // 设置页面标题
   if (to.meta.title) {
     document.title = to.meta.title as string
   }
   
-  // 暂时跳过权限检查，等Pinia初始化完成后再启用
-  // TODO: 在应用初始化完成后启用权限检查
-  /*
   const userStore = useUserStore()
+  
+  // 如果用户已登录但token无效，先尝试恢复登录状态
+  if (userStore.token && !userStore.isLogin) {
+    try {
+      await userStore.initializeAuth()
+    } catch (error) {
+      console.error('恢复登录状态失败:', error)
+      // 清除无效token
+      userStore.logout()
+    }
+  }
   
   // 检查是否需要登录
   if (to.meta.requiresAuth && !userStore.isLogin) {
+    // 未登录，跳转到登录页
     next({
       path: '/login',
       query: { redirect: to.fullPath }
@@ -152,18 +162,18 @@ router.beforeEach((to, from, next) => {
     return
   }
   
-  // 检查是否需要管理员权限
+  // 检查管理员权限
   if (to.meta.requiresAdmin && !userStore.isAdmin) {
-    next({ path: '/' })
+    // 非管理员，跳转到首页
+    next('/')
     return
   }
   
-  // 检查是否只允许未登录用户访问（如登录、注册页面）
-  if (to.meta.requiresGuest && userStore.isLogin) {
-    next({ path: '/' })
+  // 已登录用户访问登录/注册页，跳转到首页
+  if (to.meta.guest && userStore.isLogin) {
+    next('/')
     return
   }
-  */
   
   next()
 })
