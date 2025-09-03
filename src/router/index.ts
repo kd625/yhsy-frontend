@@ -67,11 +67,20 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/my-books',
-    name: 'MyBooks',
-    component: () => import('@/views/Book/MyBooks.vue'),
+    path: '/my/published',
+    name: 'MyPublished',
+    component: () => import('@/views/My/Published.vue'),
     meta: {
-      title: '我的图书 - 砚湖书影',
+      title: '我发布的图书 - 砚湖书影',
+      requiresAuth: true
+    }
+  },
+  {
+    path: '/my/orders',
+    name: 'MyOrders',
+    component: () => import('@/views/My/Orders.vue'),
+    meta: {
+      title: '我预订的图书 - 砚湖书影',
       requiresAuth: true
     }
   },

@@ -68,14 +68,7 @@ export interface BookUpdateRequest {
   bookStatus?: number
 }
 
-// 图书分类
-export interface BookCategory {
-  id: number
-  categoryName: string
-  description?: string
-  createTime: string
-  updateTime: string
-}
+
 
 // 分页响应数据
 export interface PageResponse<T> {

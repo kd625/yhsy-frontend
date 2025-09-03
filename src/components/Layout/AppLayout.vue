@@ -13,41 +13,50 @@
           </router-link>
         </div>
         
-        <!-- 右侧导航菜单 -->
-        <div class="nav-section">
-          <el-menu
-            mode="horizontal"
-            :default-active="activeIndex"
-            class="nav-menu"
-            @select="handleSelect"
-          >
-            <!-- 公共菜单 -->
-            <el-menu-item index="/">首页</el-menu-item>
+        <!-- 导航菜单 -->
+        <el-menu
+          mode="horizontal"
+          :default-active="activeIndex"
+          class="nav-menu"
+          @select="handleSelect"
+        >
+          <!-- 首页 -->
+          <el-menu-item index="/">首页</el-menu-item>
+          
+          <!-- 登录后显示的菜单 -->
+          <template v-if="userStore.isLogin">
+            <!-- 发布图书 -->
+            <el-menu-item index="/publish">发布图书</el-menu-item>
             
-            <!-- 登录后显示的菜单 -->
-            <template v-if="userStore.isLogin">
-              <el-menu-item index="/publish">发布图书</el-menu-item>
-              <el-sub-menu index="user">
-                <template #title>
-                  <el-avatar :size="24" :src="userStore.userInfo?.userAvatar">
-                    <el-icon><User /></el-icon>
-                  </el-avatar>
-                  <span class="username">{{ userStore.userInfo?.userName }}</span>
-                </template>
-                <el-menu-item index="/profile">个人中心</el-menu-item>
-                <el-menu-item index="/my-books">我的图书</el-menu-item>
-                <el-menu-item v-if="userStore.isAdmin" index="/admin">管理后台</el-menu-item>
-                <el-menu-item index="logout" @click="handleLogout">退出登录</el-menu-item>
-              </el-sub-menu>
-            </template>
+            <!-- 我的图书下拉菜单 -->
+            <el-sub-menu index="my-books" class="my-books-submenu">
+              <template #title>我的图书</template>
+              <el-menu-item index="/my/published">我发布的</el-menu-item>
+              <el-menu-item index="/my/orders">我预订的</el-menu-item>
+            </el-sub-menu>
             
-            <!-- 未登录时显示的菜单 -->
-            <template v-else>
-              <el-menu-item index="/login">登录</el-menu-item>
-              <el-menu-item index="/register">注册</el-menu-item>
-            </template>
-          </el-menu>
-        </div>
+            <!-- 后台管理（仅管理员可见） -->
+            <el-menu-item v-if="userStore.isAdmin" index="/admin">后台管理</el-menu-item>
+            
+            <!-- 用户头像（点击跳转个人中心） -->
+            <el-menu-item index="/profile" class="user-avatar-item">
+              <el-avatar :size="28" :src="userStore.userInfo?.userAvatar" class="nav-avatar">
+                <el-icon><User /></el-icon>
+              </el-avatar>
+            </el-menu-item>
+            
+            <!-- 退出登录 -->
+            <el-menu-item index="logout" class="logout-item" @click="handleLogout">
+              退出
+            </el-menu-item>
+          </template>
+          
+          <!-- 未登录时显示的菜单 -->
+          <template v-else>
+            <el-menu-item index="/login">登录</el-menu-item>
+            <el-menu-item index="/register">注册</el-menu-item>
+          </template>
+        </el-menu>
       </div>
     </el-header>
     
@@ -143,6 +152,7 @@ onMounted(() => {
 .logo-section {
   display: flex;
   align-items: center;
+  margin-right: 40px;
 }
 
 .logo-link {
@@ -168,23 +178,90 @@ onMounted(() => {
   color: #303133;
 }
 
-.nav-section {
+.nav-menu {
   flex: 1;
+  border-bottom: none;
+  background-color: transparent;
   display: flex;
   justify-content: flex-end;
 }
 
-.nav-menu {
-  border-bottom: none;
-  background-color: transparent;
-}
-
 .nav-menu .el-menu-item {
   border-bottom: none;
+  margin: 0 8px;
+  padding: 0 16px;
+  height: 60px;
+  line-height: 60px;
+  transition: all 0.3s;
 }
 
-.username {
-  margin-left: 8px;
+.nav-menu .el-menu-item:hover {
+  background-color: #ecf5ff;
+  color: #409eff;
+}
+
+.user-avatar-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px !important;
+  padding: 0 12px !important;
+}
+
+.nav-avatar {
+  transition: transform 0.3s;
+}
+
+.user-avatar-item:hover .nav-avatar {
+  transform: scale(1.1);
+}
+
+.logout-item {
+  color: #f56c6c !important;
+  font-weight: 500;
+}
+
+.logout-item:hover {
+  background-color: #fef0f0 !important;
+  color: #f56c6c !important;
+}
+
+/* 我的图书下拉菜单样式 */
+.my-books-submenu {
+  border-bottom: none;
+}
+
+.my-books-submenu .el-sub-menu__title {
+  border-bottom: none;
+  margin: 0 8px;
+  padding: 0 16px;
+  height: 60px;
+  line-height: 60px;
+  transition: all 0.3s;
+}
+
+.my-books-submenu .el-sub-menu__title:hover {
+  background-color: #ecf5ff;
+  color: #409eff;
+}
+
+.my-books-submenu .el-menu {
+  background-color: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+.my-books-submenu .el-menu-item {
+  height: 40px;
+  line-height: 40px;
+  margin: 0;
+  padding: 0 20px;
+}
+
+.my-books-submenu .el-menu-item:hover {
+  background-color: #ecf5ff;
+  color: #409eff;
 }
 
 .app-main {
@@ -216,16 +293,62 @@ onMounted(() => {
     padding: 0 10px;
   }
   
+  .logo-section {
+    margin-right: 20px;
+  }
+  
   .project-name {
     font-size: 16px;
+  }
+  
+  .nav-menu .el-menu-item {
+    margin: 0 4px;
+    padding: 0 8px;
+    font-size: 14px;
+  }
+  
+  .user-avatar-item {
+    min-width: 50px !important;
+    padding: 0 8px !important;
+  }
+  
+  .nav-avatar {
+    width: 24px !important;
+    height: 24px !important;
   }
   
   .app-main {
     padding: 10px;
   }
+}
+
+@media (max-width: 480px) {
+  .header-content {
+    padding: 0 5px;
+  }
   
-  .nav-menu {
+  .logo-section {
+    margin-right: 10px;
+  }
+  
+  .project-name {
     font-size: 14px;
+  }
+  
+  .nav-menu .el-menu-item {
+    margin: 0 2px;
+    padding: 0 6px;
+    font-size: 12px;
+  }
+  
+  .user-avatar-item {
+    min-width: 40px !important;
+    padding: 0 6px !important;
+  }
+  
+  .nav-avatar {
+    width: 20px !important;
+    height: 20px !important;
   }
 }
 </style>

@@ -64,11 +64,8 @@
               <h3 class="book-title" v-html="book.highlightString || book.bookName"></h3>
               <p class="book-author">{{ book.bookAuthor }}</p>
               <div class="book-meta">
-                <span class="book-language">语言: 中文</span>
-                <span class="book-format">文件: PDF, {{ formatFileSize(book.bookPrice) }}</span>
-                <div class="book-rating">
-                   <el-rate :model-value="4.5" disabled show-score text-color="#ff9900" />
-                 </div>
+                <p class="book-description">{{ truncateDescription(book.description) }}</p>
+                <span class="book-price">¥{{ formatPrice(book.bookPrice) }}</span>
               </div>
             </div>
           </div>
@@ -197,9 +194,10 @@ const formatPrice = (price: number) => {
   return (price / 100).toFixed(2)
 }
 
-// 格式化文件大小（这里用价格字段模拟）
-const formatFileSize = (size: number) => {
-  return `${(size / 1024).toFixed(1)}KB`
+// 截断描述文本
+const truncateDescription = (description: string) => {
+  if (!description) return '暂无描述'
+  return description.length > 15 ? description.substring(0, 15) + '...' : description
 }
 
 // 获取状态样式类
@@ -227,8 +225,6 @@ const getStatusText = (status: number) => {
 // 页面初始化
 onMounted(async () => {
   try {
-    // 获取图书分类
-    await bookStore.getCategories()
     // 获取推荐图书列表
     await bookStore.getRecommendBooks()
   } catch (error) {
@@ -441,19 +437,22 @@ onMounted(async () => {
 .book-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.book-language,
-.book-format {
-  font-size: 0.75rem;
-  color: #95a5a6;
+.book-description {
+  font-size: 0.8rem;
+  color: #666;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .book-price {
   font-size: 1rem;
   font-weight: 600;
-  color: #e74c3c;
+  color: #f56c6c;
+  align-self: flex-start;
 }
 
 .book-status {
@@ -481,19 +480,6 @@ onMounted(async () => {
 .status-offline {
   background: #e2e3e5;
   color: #383d41;
-}
-
-.book-rating {
-  margin-top: 0.5rem;
-}
-
-.book-rating :deep(.el-rate) {
-  height: auto;
-}
-
-.book-rating :deep(.el-rate__text) {
-  font-size: 0.75rem;
-  color: #95a5a6;
 }
 
 /* 空状态 */

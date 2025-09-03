@@ -8,7 +8,7 @@ import type {
   BookCard, 
   SearchFilters, 
   PageResponse,
-  BookCategory
+  BookAddRequest
 } from '@/types/book'
 import { request } from '@/utils/request'
 import { ElMessage } from 'element-plus'
@@ -19,7 +19,7 @@ export const useBookStore = defineStore('book', () => {
   const searchResults = ref<BookSearchResult[]>([])
   const recommendBooks = ref<BookCard[]>([])
   const currentBook = ref<Book | null>(null)
-  const categories = ref<BookCategory[]>([])
+
   const loading = ref(false)
   const searchLoading = ref(false)
   const recommendLoading = ref(false)
@@ -153,21 +153,7 @@ export const useBookStore = defineStore('book', () => {
     }
   }
   
-  // 获取图书分类
-  const getCategories = async () => {
-    try {
-      const response = await request.get<BookCategory[]>('/book/category/list')
-      
-      if (response.code === 0 && response.data) {
-        categories.value = response.data
-        return { success: true, data: response.data }
-      }
-      return { success: false, message: response.message }
-    } catch (error: any) {
-      console.error('获取图书分类失败:', error)
-      return { success: false, message: error.message || '获取图书分类失败' }
-    }
-  }
+
   
   // 加载更多图书
   const loadMore = async () => {
@@ -222,6 +208,28 @@ export const useBookStore = defineStore('book', () => {
     }
   }
 
+  // 添加图书
+  const addBook = async (bookData: BookAddRequest) => {
+    try {
+      loading.value = true
+      
+      const response = await request.post<Book>('/book/add', bookData)
+      
+      if (response.code === 0 && response.data) {
+        ElMessage.success('图书发布成功')
+        return { success: true, data: response.data }
+      }
+      ElMessage.error(response.message || '图书发布失败')
+      return { success: false, message: response.message }
+    } catch (error: any) {
+      console.error('添加图书失败:', error)
+      ElMessage.error('图书发布失败')
+      return { success: false, message: error.message || '图书发布失败' }
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 清空当前图书详情
   const clearCurrentBook = () => {
     currentBook.value = null
@@ -233,7 +241,6 @@ export const useBookStore = defineStore('book', () => {
     searchResults,
     recommendBooks,
     currentBook,
-    categories,
     loading,
     searchLoading,
     recommendLoading,
@@ -249,8 +256,8 @@ export const useBookStore = defineStore('book', () => {
     getBookList,
     searchBooks,
     getBookDetail,
-    getCategories,
     getRecommendBooks,
+    addBook,
     loadMore,
     resetSearch,
     refreshList,
