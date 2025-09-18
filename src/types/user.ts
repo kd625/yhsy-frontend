@@ -16,6 +16,8 @@ export interface UserVO {
 export interface UserLoginRequest {
   userAccount: string
   userPassword: string
+  captcha?: string
+  captchaKey?: string
 }
 
 // 用户注册请求
@@ -43,6 +45,12 @@ export interface UserUpdateRequest {
   gender?: number
   userRole?: string
   userPassword?: string
+}
+
+// 验证码响应对象
+export interface CaptchaVO {
+  key: string
+  image: string
 }
 
 // 完整用户信息（包含敏感信息）

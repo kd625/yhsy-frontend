@@ -183,11 +183,13 @@ const fetchPublishedBooks = async () => {
   try {
     loading.value = true
     
-    const response = await request.get('/book/list/page', {
+    const requestData = {
       sellerId: userStore.userInfo.id,
       current: pagination.current,
       pageSize: pagination.pageSize
-    })
+    }
+    
+    const response = await request.post('/book/list/page', requestData)
     
     if (response.code === 0) {
       bookList.value = response.data.records || []

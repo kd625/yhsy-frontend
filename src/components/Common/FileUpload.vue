@@ -68,6 +68,7 @@ import {
 } from '@element-plus/icons-vue'
 import type { UploadProps, UploadUserFile, UploadFile } from 'element-plus'
 import { request } from '@/utils/request'
+import { getSaToken } from '@/utils/auth'
 import type { BaseResponse } from '@/types/common'
 
 // Props 定义
@@ -139,9 +140,9 @@ const progressStatus = ref<'success' | 'exception' | 'warning' | undefined>()
 const uploadAction = computed(() => props.action)
 
 const uploadHeaders = computed(() => {
-  const token = document.cookie.split('satoken=')[1]?.split(';')[0] || ''
+  const token = getSaToken()
   return {
-    'Authorization': token ? `Bearer ${token}` : ''
+    'satoken': token || ''
   }
 })
 

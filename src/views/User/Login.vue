@@ -29,8 +29,30 @@
             placeholder="请输入密码"
             prefix-icon="Lock"
             show-password
-            @keyup.enter="handleLogin"
           />
+        </el-form-item>
+        
+        <el-form-item prop="captcha">
+          <div class="captcha-container">
+            <el-input
+              v-model="loginForm.captcha"
+              placeholder="请输入验证码"
+              prefix-icon="Key"
+              maxlength="5"
+              @keyup.enter="handleLogin"
+            />
+            <div class="captcha-image-container" @click="refreshCaptcha">
+              <img 
+                v-if="captchaImage" 
+                :src="captchaImage.startsWith('data:') ? captchaImage : `data:image/png;base64,${captchaImage}`" 
+                alt="验证码"
+                class="captcha-image"
+              />
+              <div v-else class="captcha-placeholder">
+                点击获取验证码
+              </div>
+            </div>
+          </div>
         </el-form-item>
         
         <el-form-item>
@@ -56,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { useUserStore } from '@/store/modules/user'
@@ -72,8 +94,14 @@ const loading = ref(false)
 // 登录表单数据
 const loginForm = reactive<UserLoginRequest>({
   userAccount: '',
-  userPassword: ''
+  userPassword: '',
+  captcha: '',
+  captchaKey: ''
 })
+
+// 验证码相关状态
+const captchaImage = ref<string>('')
+const captchaLoading = ref(false)
 
 // 表单验证规则
 const rules: FormRules<UserLoginRequest> = {
@@ -85,6 +113,10 @@ const rules: FormRules<UserLoginRequest> = {
   userPassword: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 8, max: 20, message: '密码长度为8-20位', trigger: 'blur' }
+  ],
+  captcha: [
+    { required: true, message: '请输入验证码', trigger: 'blur' },
+    { len: 5, message: '验证码长度为5位', trigger: 'blur' }
   ]
 }
 
@@ -118,12 +150,44 @@ const handleLogin = async () => {
   }
 }
 
+// 获取验证码
+const getCaptcha = async () => {
+  captchaLoading.value = true
+  try {
+    const result = await userStore.getCaptcha()
+    if (result.success && result.data) {
+      captchaImage.value = result.data.image
+      loginForm.captchaKey = result.data.key
+    } else {
+      ElMessage.error(result.message || '获取验证码失败')
+    }
+  } catch (error) {
+    console.error('获取验证码失败:', error)
+    ElMessage.error('获取验证码失败，请重试')
+  } finally {
+    captchaLoading.value = false
+  }
+}
+
+// 刷新验证码
+const refreshCaptcha = () => {
+  getCaptcha()
+}
+
 // 重置表单
 const resetForm = () => {
   if (loginFormRef.value) {
     loginFormRef.value.resetFields()
   }
+  // 重置验证码
+  captchaImage.value = ''
+  loginForm.captchaKey = ''
 }
+
+// 组件挂载时获取验证码
+onMounted(() => {
+  getCaptcha()
+})
 </script>
 
 <style scoped>
@@ -162,5 +226,43 @@ const resetForm = () => {
 
 .login-footer span {
   margin-right: 8px;
+}
+
+.captcha-container {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.captcha-image-container {
+  flex-shrink: 0;
+  width: 130px;
+  height: 48px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f7fa;
+  transition: border-color 0.3s;
+}
+
+.captcha-image-container:hover {
+  border-color: #409eff;
+}
+
+.captcha-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+}
+
+.captcha-placeholder {
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
+  line-height: 1.2;
 }
 </style>

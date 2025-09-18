@@ -1,8 +1,8 @@
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
-import { getSaToken, removeSaToken } from '@/utils/cookie'
 import router from '@/router'
+import { getSaToken, clearAuth } from '@/utils/auth'
 
 // 基础响应接口
 export interface BaseResponse<T = any> {
@@ -14,16 +14,19 @@ export interface BaseResponse<T = any> {
 // 创建axios实例
 const service: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
-  timeout: 10000,
-  withCredentials: true, // 允许跨域请求携带cookie
-  headers: {
-    'Content-Type': 'application/json;charset=UTF-8'
-  }
+  timeout: 10000
 })
 
 // 请求拦截器
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // 为POST、PUT、PATCH请求设置Content-Type
+    if (config.method && ['post', 'put', 'patch'].includes(config.method.toLowerCase())) {
+      if (config.headers) {
+        config.headers['Content-Type'] = 'application/json;charset=UTF-8'
+      }
+    }
+    
     // 不需要token验证的接口列表
     const noAuthUrls = ['/user/login', '/user/register']
     const needsAuth = !noAuthUrls.some(url => config.url?.includes(url))
@@ -51,7 +54,7 @@ service.interceptors.response.use(
     
     // 请求成功
     if (code === 0) {
-      return response
+      return response  // 保持返回完整的 AxiosResponse
     }
     
     // 业务错误
@@ -60,6 +63,10 @@ service.interceptors.response.use(
   },
   (error) => {
     console.error('响应错误:', error)
+    console.error('请求URL:', error.config?.url)
+    console.error('请求方法:', error.config?.method)
+    console.error('请求参数:', error.config?.params)
+    console.error('响应数据:', error.response?.data)
     
     // 处理HTTP状态码错误
     if (error.response) {
@@ -69,8 +76,7 @@ service.interceptors.response.use(
         case 401:
           ElMessage.error('登录已过期，请重新登录')
           // 清除token并跳转到登录页
-          removeSaToken()
-          localStorage.removeItem('userInfo')
+          clearAuth()
           router.push('/login')
           break
         case 403:

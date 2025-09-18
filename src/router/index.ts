@@ -84,17 +84,37 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  {
+    path: '/chat',
+    name: 'Chat',
+    component: () => import('@/views/Chat/ChatPage.vue'),
+    meta: {
+      title: '聊天 - 砚湖书影',
+      requiresAuth: true
+    }
+  },
   // 管理员路由
   {
     path: '/admin',
     name: 'Admin',
-    component: () => import('@/views/Admin/Dashboard.vue'),
+    component: () => import('@/components/Layout/AdminLayout.vue'),
     meta: {
       title: '管理后台 - 砚湖书影',
       requiresAuth: true,
       requiresAdmin: true
     },
+    redirect: '/admin/dashboard',
     children: [
+      {
+        path: 'dashboard',
+        name: 'AdminDashboard',
+        component: () => import('@/views/Admin/Dashboard.vue'),
+        meta: {
+          title: '仪表盘 - 砚湖书影',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
+      },
       {
         path: 'users',
         name: 'AdminUsers',
@@ -111,6 +131,26 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Admin/BookManagement.vue'),
         meta: {
           title: '图书管理 - 砚湖书影',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
+      },
+      {
+        path: 'test',
+        name: 'AdminTest',
+        component: () => import('@/views/Test/ApiTest.vue'),
+        meta: {
+          title: 'API测试 - 砚湖书影',
+          requiresAuth: true,
+          requiresAdmin: true
+        }
+      },
+      {
+        path: 'chat-test',
+        name: 'AdminChatTest',
+        component: () => import('@/views/Test/ChatButtonTest.vue'),
+        meta: {
+          title: 'ChatButton测试 - 砚湖书影',
           requiresAuth: true,
           requiresAdmin: true
         }
@@ -172,14 +212,36 @@ router.beforeEach(async (to, from, next) => {
   }
   
   // 检查管理员权限
-  if (to.meta.requiresAdmin && !userStore.isAdmin) {
-    // 非管理员，跳转到首页
-    next('/')
-    return
+  if (to.meta.requiresAdmin) {
+    if (!userStore.isAdmin) {
+      // 如果用户已登录但不是管理员，尝试验证管理员权限
+      if (userStore.isLogin) {
+        try {
+          const isAdmin = await userStore.checkIsAdmin()
+          if (!isAdmin) {
+            ElMessage.error('您没有管理员权限')
+            next('/')
+            return
+          }
+        } catch (error) {
+          console.error('验证管理员权限失败:', error)
+          ElMessage.error('权限验证失败')
+          next('/')
+          return
+        }
+      } else {
+        // 未登录，跳转到登录页
+        next({
+          path: '/login',
+          query: { redirect: to.fullPath }
+        })
+        return
+      }
+    }
   }
   
   // 已登录用户访问登录/注册页，跳转到首页
-  if (to.meta.guest && userStore.isLogin) {
+  if (to.meta.requiresGuest && userStore.isLogin) {
     next('/')
     return
   }

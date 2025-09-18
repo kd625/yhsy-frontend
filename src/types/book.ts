@@ -40,6 +40,39 @@ export interface BookListPageRequest {
   pageSize: number
   categoryId?: number
   bookStatus?: number
+  buyerId?: number
+  sellerId?: number
+  sortField?: string
+  sortOrder?: string
+}
+
+// 管理员图书查询请求
+export interface AdminBookListPageRequest {
+  current: number
+  pageSize: number
+  sortField?: string
+  sortOrder?: string
+  id?: number
+  sellerId?: number
+  buyerId?: number
+  categoryId?: number
+  bookName?: string
+  imageUrl?: string
+  description?: string
+  isbn?: string
+  bookAuthor?: string
+  bookPublisher?: string
+  bookPrice?: number
+  bookStatus?: number
+  createTime?: string
+  updateTime?: string
+}
+
+// 用户预订图书查询请求
+export interface UserOrderedBooksRequest {
+  current: number
+  pageSize: number
+  buyerId: number
 }
 
 // 图书添加请求

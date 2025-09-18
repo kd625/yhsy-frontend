@@ -56,9 +56,7 @@ export const useBookStore = defineStore('book', () => {
         bookStatus: 0 // 只获取在售图书
       }
       
-      const response = await request.get<PageResponse<Book>>('/book/list/page', {
-        params: requestParams
-      })
+      const response = await request.post<PageResponse<Book>>('/book/list/page', requestParams)
       
       if (response.code === 0 && response.data) {
         const { records, total, current, pages, size } = response.data

@@ -80,6 +80,77 @@
           </el-form>
         </div>
 
+        <!-- 联系方式设置区域 -->
+        <el-divider />
+        
+        <div class="contact-section">
+          <div class="section-header">
+            <h3 class="section-title">联系方式</h3>
+            <el-button
+              v-if="hasContactInfo && !isEditingContact"
+              type="primary"
+              size="small"
+              @click="startEditContact"
+            >
+              修改
+            </el-button>
+          </div>
+          
+          <!-- 显示模式 -->
+          <div v-if="hasContactInfo && !isEditingContact" class="contact-display">
+            <div class="contact-item" v-if="contactForm.qqNumber">
+              <span class="contact-label">QQ号：</span>
+              <span class="contact-value">{{ contactForm.qqNumber }}</span>
+            </div>
+            <div class="contact-item" v-if="contactForm.wechatNumber">
+              <span class="contact-label">微信号：</span>
+              <span class="contact-value">{{ contactForm.wechatNumber }}</span>
+            </div>
+          </div>
+          
+          <!-- 编辑模式 -->
+          <div v-if="!hasContactInfo || isEditingContact">
+            <el-form
+              ref="contactFormRef"
+              :model="contactForm"
+              :rules="contactRules"
+              label-width="100px"
+              class="contact-form"
+            >
+              <el-form-item label="QQ号" prop="qqNumber">
+                <el-input
+                  v-model="contactForm.qqNumber"
+                  placeholder="请输入QQ号"
+                  clearable
+                  maxlength="15"
+                  show-word-limit
+                />
+              </el-form-item>
+              <el-form-item label="微信号" prop="wechatNumber">
+                <el-input
+                  v-model="contactForm.wechatNumber"
+                  placeholder="请输入微信号"
+                  clearable
+                  maxlength="30"
+                  show-word-limit
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button
+                  type="primary"
+                  @click="saveContactInfo"
+                  :loading="contactLoading"
+                >
+                  保存联系方式
+                </el-button>
+                <el-button @click="cancelEditContact">
+                  {{ hasContactInfo ? '取消' : '重置' }}
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+
         <!-- 退出登录区域 -->
         <el-divider />
         
@@ -114,13 +185,15 @@ const userStore = useUserStore()
 
 // 表单引用
 const formRef = ref<FormInstance>()
+const contactFormRef = ref<FormInstance>()
 
 // 加载状态
 const saveLoading = ref(false)
 const logoutLoading = ref(false)
+const contactLoading = ref(false)
 
 // 上传配置
-const uploadAction = '/file/upload'
+const uploadAction = 'http://localhost:8080/file/upload'
 
 // 编辑表单数据
 const editForm = reactive({
@@ -128,11 +201,27 @@ const editForm = reactive({
   userAvatar: ''
 })
 
+// 联系方式表单数据
+const contactForm = reactive({
+  qqNumber: '',
+  wechatNumber: ''
+})
+
 // 表单验证规则
 const formRules: FormRules = {
   userName: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 2, max: 20, message: '用户名长度在 2 到 20 个字符', trigger: 'blur' }
+  ]
+}
+
+// 联系方式验证规则
+const contactRules: FormRules = {
+  qqNumber: [
+    { pattern: /^[1-9][0-9]{4,14}$/, message: 'QQ号格式不正确', trigger: 'blur' }
+  ],
+  wechatNumber: [
+    { pattern: /^[a-zA-Z][-_a-zA-Z0-9]{5,19}$/, message: '微信号格式不正确', trigger: 'blur' }
   ]
 }
 
@@ -221,28 +310,119 @@ const handleSave = async () => {
 const handleLogout = async () => {
   try {
     const result = await ElMessageBox.confirm(
-      '确定要退出登录吗？',
-      '提示',
+      '确定要退出登录吗？退出后将清除所有登录信息。',
+      '退出登录确认',
       {
-        confirmButtonText: '确定',
+        confirmButtonText: '确定退出',
         cancelButtonText: '取消',
-        type: 'warning'
+        type: 'warning',
+        dangerouslyUseHTMLString: false
       }
     )
     
     if (result === 'confirm') {
       logoutLoading.value = true
-      await userStore.logoutApi()
-      ElMessage.success('已退出登录')
-      router.push('/login')
+      // 使用store的logout方法，它会处理服务器端会话终止和客户端清理
+      await userStore.logout(true)
+      ElMessage.success('已安全退出登录')
     }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Logout error:', error)
-      ElMessage.error('退出登录失败')
+      ElMessage.error('退出登录失败，但本地状态已清除')
+      // 即使出错也要清除本地状态
+      await userStore.logout(true)
     }
   } finally {
     logoutLoading.value = false
+  }
+}
+
+// 保存联系方式
+const saveContactInfo = async () => {
+  if (!contactFormRef.value) return
+  
+  try {
+    const valid = await contactFormRef.value.validate()
+    if (!valid) return
+    
+    contactLoading.value = true
+    
+    const contactData = {
+      qqNumber: contactForm.qqNumber,
+      wechatNumber: contactForm.wechatNumber
+    }
+    
+    // 根据是否已存在记录选择调用add或update接口
+    const apiUrl = hasContactInfo.value ? '/user/userInfo/update' : '/user/userInfo/add'
+    const response = await request.post(apiUrl, contactData)
+    
+    if (response.data.code === 0) {
+      ElMessage.success('联系方式保存成功')
+      hasContactInfo.value = true
+      isEditingContact.value = false
+      // 重新获取联系方式信息以确保数据同步
+      await getContactInfo()
+    } else {
+      ElMessage.error(response.data.message || '保存失败')
+    }
+  } catch (error) {
+    console.error('Save contact info error:', error)
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    contactLoading.value = false
+  }
+}
+
+// 重置联系方式表单
+const resetContactForm = () => {
+  contactForm.qqNumber = ''
+  contactForm.wechatNumber = ''
+  contactFormRef.value?.clearValidate()
+}
+
+// 开始编辑联系方式
+const startEditContact = () => {
+  isEditingContact.value = true
+}
+
+// 取消编辑联系方式
+const cancelEditContact = () => {
+  if (hasContactInfo.value) {
+    // 如果有联系方式，取消编辑并恢复原数据
+    isEditingContact.value = false
+    getContactInfo() // 重新获取数据
+  } else {
+    // 如果没有联系方式，重置表单
+    resetContactForm()
+  }
+}
+
+// 联系方式是否已存在
+const hasContactInfo = ref(false)
+// 是否正在编辑联系方式
+const isEditingContact = ref(false)
+
+// 获取联系方式信息
+const getContactInfo = async () => {
+  try {
+    const userId = userStore.userInfo?.id
+    if (!userId) {
+      console.warn('User ID not found')
+      return
+    }
+    
+    const response = await request.get(`/user/userInfo/get?userId=${userId}`)
+    if (response.data.code === 0 && response.data.data) {
+      const contactData = response.data.data
+      contactForm.qqNumber = contactData.qqNumber || ''
+      contactForm.wechatNumber = contactData.wechatNumber || ''
+      hasContactInfo.value = !!(contactData.qqNumber || contactData.wechatNumber)
+    }
+  } catch (error) {
+    console.error('Get contact info error:', error)
+    // 如果获取失败，保持默认空值
+    hasContactInfo.value = false
   }
 }
 
@@ -253,6 +433,7 @@ onMounted(() => {
     userStore.getCurrentUser()
   }
   initForm()
+  getContactInfo()
 })
 </script>
 
@@ -350,6 +531,51 @@ onMounted(() => {
 
 .upload-controls {
   flex: 1;
+}
+
+/* 联系方式区域 */
+.contact-section {
+  margin-bottom: 30px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.contact-display {
+  max-width: 600px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.contact-item:last-child {
+  margin-bottom: 0;
+}
+
+.contact-label {
+  font-weight: 500;
+  color: #606266;
+  min-width: 80px;
+}
+
+.contact-value {
+  color: #303133;
+  font-size: 14px;
+}
+
+.contact-form {
+  max-width: 600px;
 }
 
 /* 退出登录区域 */

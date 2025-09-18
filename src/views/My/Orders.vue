@@ -177,7 +177,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Picture } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
 import { request } from '@/utils/request'
-import type { Book } from '@/types/book'
+import type { Book, UserOrderedBooksRequest } from '@/types/book'
 
 // 路由和状态管理
 const router = useRouter()
@@ -243,11 +243,13 @@ const fetchOrderedBooks = async () => {
   try {
     loading.value = true
     
-    const response = await request.get('/book/list/page', {
+    const requestData: UserOrderedBooksRequest = {
       buyerId: userStore.userInfo.id,
       current: pagination.current,
       pageSize: pagination.pageSize
-    })
+    }
+    
+    const response = await request.post('/book/list/page', requestData)
     
     if (response.code === 0) {
       bookList.value = response.data.records || []

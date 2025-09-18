@@ -1,9 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { UserVO, UserLoginRequest, UserRegisterRequest } from '@/types/user'
+import type { UserVO, UserLoginRequest, UserRegisterRequest, CaptchaVO } from '@/types/user'
 import { request } from '@/utils/request'
+import service from '@/utils/request'
 import { ElMessage } from 'element-plus'
-import { getSaToken, setSaToken, removeSaToken } from '@/utils/cookie'
+import { getSaToken, setSaToken, removeSaToken, clearAuth, getUserInfo, setUserInfo as setUserInfoToStorage } from '@/utils/auth'
+import router from '@/router'
 
 export const useUserStore = defineStore('user', () => {
   // 状态
@@ -35,40 +37,70 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('userInfo', JSON.stringify(userInfo))
   }
   
-  const logout = async () => {
+  const logout = async (redirectToLogin: boolean = true) => {
     try {
-      // 调用退出登录API
+      // 调用退出登录API，确保服务器端会话终止
       await logoutApi()
     } catch (error) {
       console.error('退出登录API调用失败:', error)
+      // 即使API调用失败，也要清除本地状态
     } finally {
-      // 无论API调用是否成功，都清除本地状态
+      // 清除本地状态
       setUserInfo(null)
       setToken(null)
-      removeSaToken()
-      localStorage.removeItem('userInfo')
+      
+      // 完全清除客户端存储的所有认证信息
+      clearAuth()
+      
+      // 清除sessionStorage中可能存在的认证信息
+      sessionStorage.clear()
+      
+      // 如果需要重定向到登录页面
+      if (redirectToLogin) {
+        // 使用replace而不是push，防止用户通过后退按钮返回
+        await router.replace('/login')
+        
+        // 强制刷新页面，确保所有状态完全重置
+        window.location.reload()
+      }
     }
   }
   
   // API调用方法
+  const getCaptcha = async () => {
+    try {
+      const response = await request.get('/user/captcha')
+      if (response.code === 0 && response.data) {
+        return { success: true, data: response.data as CaptchaVO }
+      }
+      return { success: false, message: response.message }
+    } catch (error: any) {
+      console.error('获取验证码失败:', error)
+      return { success: false, message: error.message || '获取验证码失败' }
+    }
+  }
+
   const login = async (loginData: UserLoginRequest) => {
     try {
-      const response = await request.post<UserVO>('/user/login', loginData)
+      // 直接使用axios来获取完整的响应，包括响应头
+      const axiosResponse = await service.post('/user/login', loginData)
+      const response = axiosResponse.data
+      
       if (response.code === 0 && response.data) {
-        // 登录成功后，后端会自动设置satoken到cookie中
-        // 先设置用户信息，不设置token
-        setUserInfo(response.data)
-        localStorage.setItem('userInfo', JSON.stringify(response.data))
+        // 登录成功后，从响应头中获取satoken
+        const tokenFromHeader = axiosResponse.headers['satoken']
         
-        // 延迟一下再尝试获取真实token，确保cookie已设置
-        setTimeout(() => {
-          const realToken = getSaToken()
-          if (realToken) {
-            setToken(realToken)
-          } else {
-            console.warn('未能从cookie中获取到satoken')
-          }
-        }, 100)
+        // 设置用户信息
+         setUserInfo(response.data)
+         setUserInfoToStorage(response.data)
+        
+        // 设置token（从响应头获取）
+        if (tokenFromHeader) {
+          setToken(tokenFromHeader)
+          console.log('从响应头获取到satoken')
+        } else {
+          console.warn('响应头中未找到satoken')
+        }
         
         ElMessage.success('登录成功')
         return { success: true, data: response.data }
@@ -125,22 +157,31 @@ export const useUserStore = defineStore('user', () => {
       }
     }
   }
+
+  // 检查是否为管理员
+  const checkIsAdmin = async () => {
+    try {
+      const response = await request.get<boolean>('/user/isAdmin')
+      if (response.code === 0) {
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message, data: false }
+    } catch (error: any) {
+      console.error('检查管理员权限失败:', error)
+      return { success: false, message: error.message || '检查管理员权限失败', data: false }
+    }
+  }
   
-  // 初始化时从cookie恢复token和localStorage恢复用户信息
+  // 初始化时从localStorage恢复token和用户信息
   const initializeAuth = async () => {
     const savedToken = getSaToken()
-    const savedUserInfo = localStorage.getItem('userInfo')
+    const savedUserInfo = getUserInfo()
     
     if (savedToken) {
       token.value = savedToken
       
       if (savedUserInfo) {
-        try {
-          userInfo.value = JSON.parse(savedUserInfo)
-        } catch (error) {
-          console.error('Failed to parse saved user info:', error)
-          localStorage.removeItem('userInfo')
-        }
+        userInfo.value = savedUserInfo
       }
       
       // 验证token有效性并获取最新用户信息
@@ -164,10 +205,12 @@ export const useUserStore = defineStore('user', () => {
     setLogin,
     logout,
     // API方法
+    getCaptcha,
     login,
     register,
     getCurrentUser,
     logoutApi,
+    checkIsAdmin,
     initializeAuth
   }
 })

@@ -38,17 +38,28 @@
             <!-- 后台管理（仅管理员可见） -->
             <el-menu-item v-if="userStore.isAdmin" index="/admin">后台管理</el-menu-item>
             
-            <!-- 用户头像（点击跳转个人中心） -->
-            <el-menu-item index="/profile" class="user-avatar-item">
-              <el-avatar :size="28" :src="userStore.userInfo?.userAvatar" class="nav-avatar">
-                <el-icon><User /></el-icon>
-              </el-avatar>
-            </el-menu-item>
-            
-            <!-- 退出登录 -->
-            <el-menu-item index="logout" class="logout-item" @click="handleLogout">
-              退出
-            </el-menu-item>
+            <!-- 用户下拉菜单 -->
+            <el-dropdown @command="handleUserCommand" class="user-dropdown">
+              <span class="user-info">
+                <el-avatar :size="28" :src="userStore.userInfo?.userAvatar" class="nav-avatar">
+                  <el-icon><User /></el-icon>
+                </el-avatar>
+                <span class="username">{{ userStore.userInfo?.userName }}</span>
+                <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">
+                    <el-icon><User /></el-icon>
+                    个人中心
+                  </el-dropdown-item>
+                  <el-dropdown-item command="logout" divided>
+                    <el-icon><SwitchButton /></el-icon>
+                    退出登录
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
           
           <!-- 未登录时显示的菜单 -->
@@ -78,8 +89,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { Reading, User, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Reading, User } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
 
 const router = useRouter()
@@ -96,29 +107,45 @@ const handleSelect = (key: string) => {
   }
 }
 
-// 处理退出登录
+// 处理用户下拉菜单命令
+const handleUserCommand = async (command: string) => {
+  switch (command) {
+    case 'profile':
+      router.push('/profile')
+      break
+    case 'logout':
+      await handleLogout()
+      break
+  }
+}
+
+// 退出登录处理
 const handleLogout = async () => {
   try {
-    await ElMessageBox.confirm(
-      '确定要退出登录吗？',
-      '提示',
+    const result = await ElMessageBox.confirm(
+      '确定要退出登录吗？退出后将清除所有登录信息。',
+      '退出登录确认',
       {
-        confirmButtonText: '确定',
+        confirmButtonText: '确定退出',
         cancelButtonText: '取消',
-        type: 'warning',
+        type: 'warning'
       }
     )
     
-    await userStore.logout()
-    ElMessage.success('退出登录成功')
-    router.push('/login')
+    if (result === 'confirm') {
+      await userStore.logout(true)
+      ElMessage.success('已安全退出登录')
+    }
   } catch (error) {
-    // 用户取消操作或退出登录失败
     if (error !== 'cancel') {
-      console.error('退出登录失败:', error)
+      console.error('Logout error:', error)
+      ElMessage.error('退出登录失败，但本地状态已清除')
+      await userStore.logout(true)
     }
   }
 }
+
+
 
 // 初始化
 onMounted(() => {
@@ -193,6 +220,9 @@ onMounted(() => {
   height: 60px;
   line-height: 60px;
   transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  vertical-align: middle;
 }
 
 .nav-menu .el-menu-item:hover {
@@ -206,25 +236,56 @@ onMounted(() => {
   justify-content: center;
   min-width: 60px !important;
   padding: 0 12px !important;
+  height: 60px;
 }
 
 .nav-avatar {
-  transition: transform 0.3s;
+  border: 2px solid #e4e7ed;
+  transition: border-color 0.3s;
 }
 
-.user-avatar-item:hover .nav-avatar {
-  transform: scale(1.1);
+.nav-avatar:hover {
+  border-color: #409eff;
 }
 
-.logout-item {
-  color: #f56c6c !important;
+.user-dropdown {
+  margin-left: 20px;
+  cursor: pointer;
+  height: 60px;
+  display: flex;
+  align-items: center;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 60px;
+  color: #303133;
+  transition: color 0.3s;
+  line-height: 1;
+}
+
+.user-info:hover {
+  color: #409eff;
+}
+
+.username {
+  margin: 0 8px;
+  font-size: 14px;
   font-weight: 500;
 }
 
-.logout-item:hover {
-  background-color: #fef0f0 !important;
-  color: #f56c6c !important;
+.dropdown-icon {
+  font-size: 12px;
+  transition: transform 0.3s;
 }
+
+.user-dropdown:hover .dropdown-icon {
+  transform: rotate(180deg);
+}
+
+
 
 /* 我的图书下拉菜单样式 */
 .my-books-submenu {
@@ -238,6 +299,9 @@ onMounted(() => {
   height: 60px;
   line-height: 60px;
   transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  vertical-align: middle;
 }
 
 .my-books-submenu .el-sub-menu__title:hover {
