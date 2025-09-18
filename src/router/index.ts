@@ -84,6 +84,15 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  {
+    path: '/chat/:sessionId',
+    name: 'Chat',
+    component: () => import('@/views/Chat.vue'),
+    meta: {
+      title: '聊天 - 砚湖书影',
+      requiresAuth: true
+    }
+  },
   // 管理员路由
   {
     path: '/admin',

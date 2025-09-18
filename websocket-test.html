@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 聊天测试页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .status.connected {
+            background: #4CAF50;
+        }
+
+        .status.disconnected {
+            background: #f44336;
+        }
+
+        .status.connecting {
+            background: #ff9800;
+        }
+
+        .main-content {
+            display: flex;
+            height: 600px;
+        }
+
+        .left-panel {
+            width: 300px;
+            background: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .connection-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #4facfe;
+            padding-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: #4facfe;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3d8bfe;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .message-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #fff;
+        }
+
+        .message-input {
+            padding: 20px;
+            border-top: 1px solid #e9ecef;
+            background: #f8f9fa;
+        }
+
+        .message-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #4facfe;
+            background: #f8f9ff;
+        }
+
+        .message-item.sent {
+            border-left-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .message-item.received {
+            border-left-color: #17a2b8;
+            background: #e7f7ff;
+        }
+
+        .message-item.error {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .message-item.system {
+            border-left-color: #6c757d;
+            background: #f8f9fa;
+        }
+
+        .message-time {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .message-content {
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #4facfe;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .quick-messages {
+            margin-top: 20px;
+        }
+
+        .quick-message-btn {
+            display: block;
+            width: 100%;
+            margin-bottom: 5px;
+            text-align: left;
+            background: #e9ecef;
+            border: 1px solid #ced4da;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .quick-message-btn:hover {
+            background: #dee2e6;
+        }
+
+        .log-area {
+            height: 150px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .log-item {
+            margin-bottom: 5px;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+
+        .log-item.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .log-item.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .log-item.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .log-item.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>WebSocket 聊天测试页面</h1>
+            <div id="connectionStatus" class="status disconnected">未连接</div>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <!-- 连接控制 -->
+                <div class="connection-section">
+                    <div class="section-title">连接控制</div>
+                    <div class="form-group">
+                        <label>WebSocket URL:</label>
+                        <input type="text" id="wsUrl" value="ws://localhost:8888/websocket">
+                    </div>
+                    <button class="btn btn-primary" id="connectBtn">连接</button>
+                    <button class="btn btn-danger" id="disconnectBtn" disabled>断开</button>
+                </div>
+
+                <!-- 统计信息 -->
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="sentCount">0</div>
+                        <div class="stat-label">已发送</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="receivedCount">0</div>
+                        <div class="stat-label">已接收</div>
+                    </div>
+                </div>
+
+                <!-- 认证 -->
+                <div class="connection-section">
+                    <div class="section-title">用户认证</div>
+                    <div class="form-group">
+                        <label>Access Token:</label>
+                        <input type="text" id="accessToken" value="test-token-123">
+                    </div>
+                    <button class="btn btn-success" id="authBtn" disabled>认证</button>
+                </div>
+
+                <!-- 消息发送 -->
+                <div class="connection-section">
+                    <div class="section-title">消息发送</div>
+                    <div class="form-group">
+                        <label>消息类型:</label>
+                        <select id="messageType">
+                            <option value="HEARTBEAT_REQUEST">心跳请求</option>
+                            <option value="CHAT_SEND_TO_ALL_REQUEST">群聊消息</option>
+                            <option value="CHAT_SEND_TO_ONE_REQUEST">私聊消息</option>
+                            <option value="AUTH_REQUEST">认证请求</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="toUserGroup" style="display: none;">
+                        <label>接收用户:</label>
+                        <input type="text" id="toUser" placeholder="用户ID">
+                    </div>
+                    <div class="form-group" id="contentGroup">
+                        <label>消息内容:</label>
+                        <textarea id="messageContent" placeholder="输入消息内容..."></textarea>
+                    </div>
+                    <button class="btn btn-primary" id="sendBtn" disabled>发送消息</button>
+                    <button class="btn btn-warning" id="heartbeatBtn" disabled>发送心跳</button>
+                </div>
+
+                <!-- 快捷消息 -->
+                <div class="quick-messages">
+                    <div class="section-title">快捷消息</div>
+                    <button class="quick-message-btn" data-type="CHAT_SEND_TO_ALL_REQUEST" data-content="Hello, everyone!">群聊: Hello, everyone!</button>
+                    <button class="quick-message-btn" data-type="CHAT_SEND_TO_ALL_REQUEST" data-content="测试中文消息">群聊: 测试中文消息</button>
+                    <button class="quick-message-btn" data-type="HEARTBEAT_REQUEST" data-content="">心跳测试</button>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="message-area" id="messageArea">
+                    <div class="message-item system">
+                        <div class="message-time">系统消息</div>
+                        <div class="message-content">欢迎使用 WebSocket 测试页面！请先连接到服务器。</div>
+                    </div>
+                </div>
+
+                <div class="message-input">
+                    <div class="form-group">
+                        <input type="text" id="quickMessage" placeholder="快速发送群聊消息..." style="width: calc(100% - 120px); display: inline-block;">
+                        <button class="btn btn-primary" id="quickSendBtn" disabled style="width: 100px; display: inline-block; margin-left: 10px;">发送</button>
+                    </div>
+                    <button class="btn btn-danger" id="clearBtn">清空消息</button>
+                    <button class="btn btn-warning" id="exportBtn">导出日志</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 调试日志 -->
+        <div style="padding: 20px;">
+            <div class="section-title">调试日志</div>
+            <div class="log-area" id="logArea"></div>
+        </div>
+    </div>
+
+    <script>
+        class WebSocketTester {
+            constructor() {
+                this.ws = null;
+                this.isConnected = false;
+                this.sentCount = 0;
+                this.receivedCount = 0;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 5;
+                this.reconnectInterval = 3000;
+                this.heartbeatInterval = null;
+                this.heartbeatTimer = 30000; // 30秒心跳间隔
+                
+                this.initElements();
+                this.bindEvents();
+                this.updateUI();
+            }
+
+            initElements() {
+                // 连接控制
+                this.wsUrlInput = document.getElementById('wsUrl');
+                this.connectBtn = document.getElementById('connectBtn');
+                this.disconnectBtn = document.getElementById('disconnectBtn');
+                this.connectionStatus = document.getElementById('connectionStatus');
+
+                // 认证
+                this.accessTokenInput = document.getElementById('accessToken');
+                this.authBtn = document.getElementById('authBtn');
+
+                // 消息发送
+                this.messageTypeSelect = document.getElementById('messageType');
+                this.toUserInput = document.getElementById('toUser');
+                this.messageContentTextarea = document.getElementById('messageContent');
+                this.sendBtn = document.getElementById('sendBtn');
+                this.heartbeatBtn = document.getElementById('heartbeatBtn');
+
+                // 快速消息
+                this.quickMessageInput = document.getElementById('quickMessage');
+                this.quickSendBtn = document.getElementById('quickSendBtn');
+
+                // 显示区域
+                this.messageArea = document.getElementById('messageArea');
+                this.logArea = document.getElementById('logArea');
+
+                // 统计
+                this.sentCountEl = document.getElementById('sentCount');
+                this.receivedCountEl = document.getElementById('receivedCount');
+
+                // 其他按钮
+                this.clearBtn = document.getElementById('clearBtn');
+                this.exportBtn = document.getElementById('exportBtn');
+
+                // 分组元素
+                this.toUserGroup = document.getElementById('toUserGroup');
+                this.contentGroup = document.getElementById('contentGroup');
+            }
+
+            bindEvents() {
+                // 连接控制
+                this.connectBtn.addEventListener('click', () => this.connect());
+                this.disconnectBtn.addEventListener('click', () => this.disconnect());
+
+                // 认证
+                this.authBtn.addEventListener('click', () => this.authenticate());
+
+                // 消息类型变化
+                this.messageTypeSelect.addEventListener('change', () => this.onMessageTypeChange());
+
+                // 发送消息
+                this.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.heartbeatBtn.addEventListener('click', () => this.sendHeartbeat());
+
+                // 快速发送
+                this.quickSendBtn.addEventListener('click', () => this.sendQuickMessage());
+                this.quickMessageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendQuickMessage();
+                    }
+                });
+
+                // 快捷消息按钮
+                document.querySelectorAll('.quick-message-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const type = btn.dataset.type;
+                        const content = btn.dataset.content;
+                        this.messageTypeSelect.value = type;
+                        this.messageContentTextarea.value = content;
+                        this.onMessageTypeChange();
+                        if (this.isConnected) {
+                            this.sendMessage();
+                        }
+                    });
+                });
+
+                // 其他功能
+                this.clearBtn.addEventListener('click', () => this.clearMessages());
+                this.exportBtn.addEventListener('click', () => this.exportLogs());
+
+                // 页面关闭时断开连接
+                window.addEventListener('beforeunload', () => {
+                    if (this.ws) {
+                        this.ws.close();
+                    }
+                });
+            }
+
+            connect() {
+                if (this.isConnected) {
+                    this.log('已经连接，无需重复连接', 'warning');
+                    return;
+                }
+
+                const url = this.wsUrlInput.value.trim();
+                if (!url) {
+                    this.log('请输入 WebSocket URL', 'error');
+                    return;
+                }
+
+                this.log(`正在连接到: ${url}`, 'info');
+                this.updateConnectionStatus('connecting', '连接中...');
+
+                try {
+                    this.ws = new WebSocket(url);
+                    this.setupWebSocketEvents();
+                } catch (error) {
+                    this.log(`连接失败: ${error.message}`, 'error');
+                    this.updateConnectionStatus('disconnected', '连接失败');
+                }
+            }
+
+            setupWebSocketEvents() {
+                this.ws.onopen = (event) => {
+                    this.isConnected = true;
+                    this.reconnectAttempts = 0;
+                    this.log('WebSocket 连接成功', 'success');
+                    this.updateConnectionStatus('connected', '已连接');
+                    this.updateUI();
+                    this.startHeartbeat();
+                    
+                    // 添加连接成功消息
+                    this.addMessage('system', 'WebSocket 连接成功！可以开始发送消息了。');
+                };
+
+                this.ws.onmessage = (event) => {
+                    this.receivedCount++;
+                    this.updateStats();
+                    
+                    try {
+                        const data = JSON.parse(event.data);
+                        this.log(`收到消息: ${event.data}`, 'info');
+                        this.addMessage('received', JSON.stringify(data, null, 2), data.type || 'Unknown');
+                        
+                        // 处理特定消息类型
+                        this.handleReceivedMessage(data);
+                    } catch (error) {
+                        this.log(`解析消息失败: ${error.message}`, 'error');
+                        this.addMessage('error', `解析失败: ${event.data}`);
+                    }
+                };
+
+                this.ws.onclose = (event) => {
+                    this.isConnected = false;
+                    this.stopHeartbeat();
+                    this.updateConnectionStatus('disconnected', '连接断开');
+                    this.updateUI();
+                    
+                    const reason = event.reason || '未知原因';
+                    this.log(`WebSocket 连接关闭: ${reason} (代码: ${event.code})`, 'warning');
+                    this.addMessage('system', `连接已断开: ${reason}`);
+                    
+                    // 自动重连
+                    if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
+                        this.scheduleReconnect();
+                    }
+                };
+
+                this.ws.onerror = (error) => {
+                    this.log(`WebSocket 错误: ${error}`, 'error');
+                    this.addMessage('error', 'WebSocket 连接发生错误');
+                };
+            }
+
+            disconnect() {
+                if (this.ws) {
+                    this.ws.close(1000, '用户主动断开');
+                    this.ws = null;
+                }
+                this.isConnected = false;
+                this.stopHeartbeat();
+                this.updateConnectionStatus('disconnected', '已断开');
+                this.updateUI();
+                this.log('主动断开连接', 'info');
+            }
+
+            scheduleReconnect() {
+                this.reconnectAttempts++;
+                const delay = this.reconnectInterval * this.reconnectAttempts;
+                
+                this.log(`${delay/1000}秒后尝试第${this.reconnectAttempts}次重连...`, 'warning');
+                this.addMessage('system', `${delay/1000}秒后尝试重连...`);
+                
+                setTimeout(() => {
+                    if (!this.isConnected) {
+                        this.connect();
+                    }
+                }, delay);
+            }
+
+            startHeartbeat() {
+                this.stopHeartbeat();
+                this.heartbeatInterval = setInterval(() => {
+                    if (this.isConnected) {
+                        this.sendHeartbeat();
+                    }
+                }, this.heartbeatTimer);
+                this.log(`启动自动心跳，间隔: ${this.heartbeatTimer/1000}秒`, 'info');
+            }
+
+            stopHeartbeat() {
+                if (this.heartbeatInterval) {
+                    clearInterval(this.heartbeatInterval);
+                    this.heartbeatInterval = null;
+                    this.log('停止自动心跳', 'info');
+                }
+            }
+
+            authenticate() {
+                const token = this.accessTokenInput.value.trim();
+                if (!token) {
+                    this.log('请输入 Access Token', 'error');
+                    return;
+                }
+
+                const message = {
+                    type: 'AUTH_REQUEST',
+                    message: JSON.stringify({
+                        accessToken: token
+                    })
+                };
+
+                this.sendWebSocketMessage(message);
+            }
+
+            sendMessage() {
+                const type = this.messageTypeSelect.value;
+                const content = this.messageContentTextarea.value.trim();
+                
+                let messageData = {};
+                
+                switch (type) {
+                    case 'HEARTBEAT_REQUEST':
+                        messageData = {};
+                        break;
+                    case 'CHAT_SEND_TO_ALL_REQUEST':
+                        if (!content) {
+                            this.log('请输入消息内容', 'error');
+                            return;
+                        }
+                        messageData = {
+                            msgId: this.generateMsgId('CHAT_SEND_TO_ALL_REQUEST'),
+                            content: content
+                        };
+                        break;
+                    case 'CHAT_SEND_TO_ONE_REQUEST':
+                        const toUser = this.toUserInput.value.trim();
+                        if (!toUser || !content) {
+                            this.log('请输入接收用户和消息内容', 'error');
+                            return;
+                        }
+                        messageData = {
+                            msgId: this.generateMsgId('CHAT_SEND_TO_ONE_REQUEST'),
+                            toUser: Number(toUser), // 确保转换为正确的数字类型
+                            content: content
+                        };
+                        break;
+                    case 'AUTH_REQUEST':
+                        const token = this.accessTokenInput.value.trim();
+                        if (!token) {
+                            this.log('请输入 Access Token', 'error');
+                            return;
+                        }
+                        messageData = {
+                            accessToken: token
+                        };
+                        break;
+                    default:
+                        this.log('未知的消息类型', 'error');
+                        return;
+                }
+
+                const message = {
+                    type: type,
+                    message: JSON.stringify(messageData)
+                };
+
+                this.sendWebSocketMessage(message);
+            }
+
+            sendHeartbeat() {
+                const message = {
+                    type: 'HEARTBEAT_REQUEST',
+                    message: JSON.stringify({})
+                };
+                this.sendWebSocketMessage(message);
+            }
+
+            sendQuickMessage() {
+                const content = this.quickMessageInput.value.trim();
+                if (!content) {
+                    this.log('请输入消息内容', 'error');
+                    return;
+                }
+
+                const message = {
+                    type: 'CHAT_SEND_TO_ALL_REQUEST',
+                    message: JSON.stringify({
+                        msgId: this.generateMsgId('CHAT_SEND_TO_ALL_REQUEST'),
+                        content: content
+                    })
+                };
+
+                this.sendWebSocketMessage(message);
+                this.quickMessageInput.value = '';
+            }
+
+            sendWebSocketMessage(message) {
+                if (!this.isConnected || !this.ws) {
+                    this.log('WebSocket 未连接', 'error');
+                    return;
+                }
+
+                try {
+                    const jsonMessage = JSON.stringify(message);
+                    this.ws.send(jsonMessage);
+                    this.sentCount++;
+                    this.updateStats();
+                    
+                    this.log(`发送消息: ${jsonMessage}`, 'success');
+                    this.addMessage('sent', JSON.stringify(message, null, 2), message.type);
+                } catch (error) {
+                    this.log(`发送消息失败: ${error.message}`, 'error');
+                    this.addMessage('error', `发送失败: ${error.message}`);
+                }
+            }
+
+            handleReceivedMessage(data) {
+                // 处理特定类型的响应消息
+                switch (data.type) {
+                    case 'HEARTBEAT_RESPONSE':
+                        this.log('收到心跳响应', 'success');
+                        break;
+                    case 'AUTH_RESPONSE':
+                        const authData = JSON.parse(data.message);
+                        if (authData.code === 0) {
+                            this.log('认证成功', 'success');
+                            this.addMessage('system', '用户认证成功！');
+                        } else {
+                            this.log(`认证失败: ${authData.message}`, 'error');
+                            this.addMessage('system', `认证失败: ${authData.message}`);
+                        }
+                        break;
+                    case 'CHAT_SEND_RESPONSE':
+                        const chatResponse = JSON.parse(data.message);
+                        if (chatResponse.code === 0) {
+                            this.log('消息发送成功', 'success');
+                        } else {
+                            this.log(`消息发送失败: ${chatResponse.message}`, 'error');
+                        }
+                        break;
+                    case 'CHAT_REDIRECT_TO_USER_REQUEST':
+                        const chatData = JSON.parse(data.message);
+                        this.addMessage('received', `收到群聊消息: ${chatData.content}`, 'Chat Message');
+                        break;
+                }
+            }
+
+            onMessageTypeChange() {
+                const type = this.messageTypeSelect.value;
+                
+                // 显示/隐藏相关字段
+                if (type === 'CHAT_SEND_TO_ONE_REQUEST') {
+                    this.toUserGroup.style.display = 'block';
+                } else {
+                    this.toUserGroup.style.display = 'none';
+                }
+
+                if (type === 'HEARTBEAT_REQUEST') {
+                    this.contentGroup.style.display = 'none';
+                } else {
+                    this.contentGroup.style.display = 'block';
+                }
+
+                // 设置默认内容
+                switch (type) {
+                    case 'HEARTBEAT_REQUEST':
+                        this.messageContentTextarea.value = '';
+                        break;
+                    case 'AUTH_REQUEST':
+                        this.messageContentTextarea.value = '';
+                        break;
+                    default:
+                        if (!this.messageContentTextarea.value) {
+                            this.messageContentTextarea.value = 'Hello from WebSocket test!';
+                        }
+                        break;
+                }
+            }
+
+            generateMsgId(messageType) {
+                // ChatSendToOneRequest 需要 Long 类型的 msgId
+                if (messageType === 'CHAT_SEND_TO_ONE_REQUEST') {
+                    return Date.now(); // 返回时间戳作为 Long 类型
+                }
+                // ChatSendToAllRequest 需要 String 类型的 msgId
+                else if (messageType === 'CHAT_SEND_TO_ALL_REQUEST') {
+                    return 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                }
+                // 默认返回时间戳
+                return Date.now();
+            }
+
+            addMessage(type, content, messageType = '') {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message-item ${type}`;
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'message-time';
+                timeDiv.textContent = new Date().toLocaleString() + (messageType ? ` [${messageType}]` : '');
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                contentDiv.textContent = content;
+                
+                messageDiv.appendChild(timeDiv);
+                messageDiv.appendChild(contentDiv);
+                
+                this.messageArea.appendChild(messageDiv);
+                this.messageArea.scrollTop = this.messageArea.scrollHeight;
+            }
+
+            log(message, type = 'info') {
+                const logDiv = document.createElement('div');
+                logDiv.className = `log-item ${type}`;
+                logDiv.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                
+                this.logArea.appendChild(logDiv);
+                this.logArea.scrollTop = this.logArea.scrollHeight;
+                
+                console.log(`[WebSocket Tester] ${message}`);
+            }
+
+            updateConnectionStatus(status, text) {
+                this.connectionStatus.className = `status ${status}`;
+                this.connectionStatus.textContent = text;
+            }
+
+            updateStats() {
+                this.sentCountEl.textContent = this.sentCount;
+                this.receivedCountEl.textContent = this.receivedCount;
+            }
+
+            updateUI() {
+                // 更新按钮状态
+                this.connectBtn.disabled = this.isConnected;
+                this.disconnectBtn.disabled = !this.isConnected;
+                this.authBtn.disabled = !this.isConnected;
+                this.sendBtn.disabled = !this.isConnected;
+                this.heartbeatBtn.disabled = !this.isConnected;
+                this.quickSendBtn.disabled = !this.isConnected;
+            }
+
+            clearMessages() {
+                this.messageArea.innerHTML = '<div class="message-item system"><div class="message-time">系统消息</div><div class="message-content">消息已清空</div></div>';
+                this.logArea.innerHTML = '';
+                this.log('消息和日志已清空', 'info');
+            }
+
+            exportLogs() {
+                const logs = Array.from(this.logArea.children).map(item => item.textContent).join('\n');
+                const messages = Array.from(this.messageArea.children).map(item => {
+                    const time = item.querySelector('.message-time').textContent;
+                    const content = item.querySelector('.message-content').textContent;
+                    return `${time}\n${content}`;
+                }).join('\n\n');
+                
+                const exportData = `WebSocket 测试日志导出\n生成时间: ${new Date().toLocaleString()}\n\n=== 调试日志 ===\n${logs}\n\n=== 消息记录 ===\n${messages}`;
+                
+                const blob = new Blob([exportData], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `websocket-test-log-${Date.now()}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                this.log('日志已导出', 'success');
+            }
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            window.wsTester = new WebSocketTester();
+        });
+    </script>
+</body>
+</html>

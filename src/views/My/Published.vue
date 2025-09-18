@@ -77,6 +77,14 @@
             <!-- 操作按钮 -->
             <div class="book-actions">
               <el-button 
+                v-if="book.bookStatus === 1"
+                size="small" 
+                type="success"
+                @click.stop="startChat(book.buyerId)"
+              >
+                聊一聊
+              </el-button>
+              <el-button 
                 size="small" 
                 @click.stop="handleEdit(book.id)"
                 :disabled="book.bookStatus === 2"
@@ -118,12 +126,14 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Picture } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
+import { useIMStore } from '@/store/im'
 import { request } from '@/utils/request'
 import type { Book } from '@/types/book'
 
 // 路由和状态管理
 const router = useRouter()
 const userStore = useUserStore()
+const imStore = useIMStore()
 
 // 响应式数据
 const loading = ref(false)
@@ -255,6 +265,53 @@ const handleSizeChange = (val: number) => {
 const handleCurrentChange = (val: number) => {
   pagination.current = val
   fetchPublishedBooks()
+}
+
+// 开始聊天
+const startChat = async (buyerId: number) => {
+  try {
+    // 确保用户已登录
+    if (!userStore.isLogin || !userStore.token) {
+      ElMessage.error('请先登录')
+      router.push('/login')
+      return
+    }
+
+    // 初始化IM客户端（如果还没有初始化）
+    if (!imStore.client) {
+      imStore.initialize(userStore.token)
+    }
+
+    // 确保WebSocket连接成功
+    if (!imStore.isReady) {
+      await imStore.connectIM()
+    }
+    
+    // 找到对应的书籍信息
+    const book = bookList.value.find((b: Book) => b.buyerId === buyerId)
+    if (!book) {
+      ElMessage.error('找不到对应的书籍信息')
+      return
+    }
+    
+    // 调用后端接口开始会话
+    const response = await request.post('/im/session/startChat', {
+      bookId: book.id,
+      buyerId: buyerId,
+      sellerId: userStore.userInfo?.id
+    })
+    
+    if (response.code === 0) {
+      const sessionId = response.data.id
+      // 跳转到聊天页面
+      router.push(`/chat/${sessionId}`)
+    } else {
+      ElMessage.error(response.message || '创建会话失败')
+    }
+  } catch (error) {
+    console.error('开始聊天失败:', error)
+    ElMessage.error('开始聊天失败，请稍后重试')
+  }
 }
 
 // 页面初始化
