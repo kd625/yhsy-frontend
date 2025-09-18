@@ -98,18 +98,6 @@
             >
               已下架
             </el-button>
-            
-            <!-- 聊天按钮 - 只有在已预订状态下且当前用户是买家时显示 -->
-            <ChatButton
-              v-if="canChat"
-              :seller-id="book.sellerId"
-              :buyer-id="book.buyerId"
-              :book-id="book.id"
-              button-text="联系卖家"
-              class="chat-button"
-              @chat-start="handleChatStart"
-              @error="handleChatError"
-            />
           </div>
         </div>
       </div>
@@ -146,7 +134,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
 import { useBookStore } from '@/store/modules/book'
 import { useUserStore } from '@/store/modules/user'
-import ChatButton from '@/im/components/ChatButton.vue'
 import type { Book } from '@/types/book'
 import type { UserVO } from '@/types/user'
 import request from '@/utils/request'
@@ -173,17 +160,6 @@ const canOrder = computed(() => {
   
   // 只有在售状态才能预订
   return book.value.bookStatus === 0
-})
-
-// 是否可以聊天 - 已预订状态下且当前用户是买家
-const canChat = computed(() => {
-  if (!book.value || !userStore.userInfo) return false
-  
-  // 只有已预订状态才能聊天
-  if (book.value.bookStatus !== 1) return false
-  
-  // 当前用户必须是买家
-  return book.value.buyerId === userStore.userInfo.id
 })
 
 // 获取图书详情
@@ -271,18 +247,6 @@ const handleOrder = async () => {
   } finally {
     ordering.value = false
   }
-}
-
-// 处理聊天开始事件
-const handleChatStart = (session: any) => {
-  console.log('聊天会话已创建:', session)
-  ElMessage.success('聊天窗口已打开')
-}
-
-// 处理聊天错误事件
-const handleChatError = (error: Error) => {
-  console.error('聊天启动失败:', error)
-  ElMessage.error(error.message || '聊天启动失败')
 }
 
 // 获取状态类型

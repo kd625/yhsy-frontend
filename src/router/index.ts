@@ -84,15 +84,6 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
-  {
-    path: '/chat',
-    name: 'Chat',
-    component: () => import('@/views/Chat/ChatPage.vue'),
-    meta: {
-      title: '聊天 - 砚湖书影',
-      requiresAuth: true
-    }
-  },
   // 管理员路由
   {
     path: '/admin',
@@ -141,16 +132,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Test/ApiTest.vue'),
         meta: {
           title: 'API测试 - 砚湖书影',
-          requiresAuth: true,
-          requiresAdmin: true
-        }
-      },
-      {
-        path: 'chat-test',
-        name: 'AdminChatTest',
-        component: () => import('@/views/Test/ChatButtonTest.vue'),
-        meta: {
-          title: 'ChatButton测试 - 砚湖书影',
           requiresAuth: true,
           requiresAdmin: true
         }
