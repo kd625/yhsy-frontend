@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { IMClient } from '@/im/IMClient'
-import type { ChatMessage as IMChatMessage } from '@/im/IMClient'
+import type { ChatMessage as IMChatMessage, IncomingChatMessage } from '@/im/IMClient'
+import { useUserStore } from '@/store/modules/user'
+
+// 定义消息发送状态
+export type MessageStatus = 'pending' | 'sent' | 'delivered' | 'failed'
 
 // 定义消息接口
 export interface ChatMessage {
@@ -11,6 +15,12 @@ export interface ChatMessage {
   content: string
   timestamp: number
   type: 'sent' | 'received'
+  status?: MessageStatus  // 发送状态，仅对发送的消息有效
+  fromUserName?: string   // 发送者用户名
+  fromUserAvatar?: string // 发送者头像
+  toUserName?: string     // 接收者用户名
+  toUserAvatar?: string   // 接收者头像
+  msgId?: number          // 消息ID，用于状态跟踪
 }
 
 // 定义会话接口
@@ -42,34 +52,38 @@ export const useIMStore = defineStore('im', () => {
   const currentConversationId = ref<string | null>(null)
 
   // 计算属性
-  const isReady = computed(() => isConnected.value && isAuthenticated.value)
+  const isReady = computed(() => {
+    return client.value && isConnected.value && isAuthenticated.value
+  })
+
   const currentConversation = computed(() => {
     if (!currentConversationId.value) return null
     return conversations.value.get(currentConversationId.value) || null
   })
+
   const totalUnreadCount = computed(() => {
     let total = 0
-    conversations.value.forEach(conv => {
-      total += conv.unreadCount
-    })
+    for (const conversation of conversations.value.values()) {
+      total += conversation.unreadCount
+    }
     return total
   })
 
   // 初始化IM客户端
   const initialize = (accessToken: string): void => {
     if (client.value) {
-      console.warn('IM客户端已经初始化')
-      return
+      client.value.disconnect()
     }
 
-    // 创建IMClient实例
     client.value = new IMClient({
-      url: 'ws://localhost:8888/websocket',
       accessToken,
-      heartbeatInterval: 30000,
-      reconnectDelay: 5000,
-      maxReconnectAttempts: 5
+      url: 'ws://localhost:8888/websocket'
     })
+  }
+
+  // 初始化客户端事件监听
+  const initClient = (): void => {
+    if (!client.value) return
 
     // 订阅连接事件
     client.value.on('connected', () => {
@@ -89,99 +103,139 @@ export const useIMStore = defineStore('im', () => {
       isAuthenticated.value = true
     })
 
-    client.value.on('authFailed', (error: any) => {
-      console.error('IM客户端认证失败:', error)
+    client.value.on('authFailed', (data: { error: string }) => {
+      console.error('IM客户端认证失败:', data.error)
       isAuthenticated.value = false
     })
 
     // 订阅消息事件
-    client.value.on('messageReceived', (data: { content: string }) => {
-      handleIncomingMessage(data)
+    client.value.on('messageReceived', (data: IncomingChatMessage) => {
+      handleMessageReceived(data)
     })
 
+    // 订阅消息发送成功事件
     client.value.on('messageSent', (data: { msgId: number }) => {
-      handleSentMessage(data)
+      handleMessageSent(data)
     })
 
-    // 订阅重连事件
-    client.value.on('reconnecting', (data: { attempt: number }) => {
-      console.log(`IM客户端正在重连，第${data.attempt}次尝试`)
-    })
-
-    client.value.on('reconnected', () => {
-      console.log('IM客户端重连成功')
-    })
-
-    // 订阅心跳事件
-    client.value.on('heartbeatSent', () => {
-      console.log('心跳已发送')
-    })
-
-    client.value.on('heartbeatReceived', () => {
-      console.log('心跳响应已接收')
+    // 订阅消息发送失败事件
+    client.value.on('messageFailed', (data: { msgId: number; error: string }) => {
+      handleMessageFailed(data)
     })
   }
 
-  // 连接IM服务器
-  const connectIM = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (!client.value) {
-        reject(new Error('IM客户端未初始化，请先调用initialize方法'))
-        return
-      }
+  // 连接IM服务
+  const connectIM = async (): Promise<void> => {
+    if (!client.value) {
+      throw new Error('IM客户端未初始化')
+    }
 
-      if (isConnected.value) {
-        if (isAuthenticated.value) {
-          resolve()
-        } else {
-          reject(new Error('已连接但未认证'))
-        }
-        return
-      }
-
-      // 设置一次性事件监听器
-      const onAuthenticated = () => {
-        client.value?.off('authenticated', onAuthenticated)
-        client.value?.off('authFailed', onAuthFailed)
-        client.value?.off('disconnected', onDisconnected)
-        resolve()
-      }
-
-      const onAuthFailed = (error: any) => {
-        client.value?.off('authenticated', onAuthenticated)
-        client.value?.off('authFailed', onAuthFailed)
-        client.value?.off('disconnected', onDisconnected)
-        reject(new Error(`认证失败: ${error}`))
-      }
-
-      const onDisconnected = () => {
-        client.value?.off('authenticated', onAuthenticated)
-        client.value?.off('authFailed', onAuthFailed)
-        client.value?.off('disconnected', onDisconnected)
-        reject(new Error('连接断开'))
-      }
-
-      client.value.on('authenticated', onAuthenticated)
-      client.value.on('authFailed', onAuthFailed)
-      client.value.on('disconnected', onDisconnected)
-
-      // 开始连接
-      client.value.connect()
-    })
+    try {
+      await client.value.connect()
+      await client.value.authenticate()
+    } catch (error) {
+      console.error('连接IM服务失败:', error)
+      throw error
+    }
   }
 
   // 发送消息
-  const sendMessage = async (toUserId: string, content: string): Promise<void> => {
+  const sendMessage = async (toUserId: string, sessionId: string, content: string): Promise<void> => {
+    console.log('IM Store 发送消息参数:', { toUserId, sessionId, content });
+    console.log('sessionId类型:', typeof sessionId, 'sessionId值:', sessionId);
+    
     if (!client.value || !isReady.value) {
       throw new Error('IM客户端未就绪')
     }
 
+    // 生成临时消息ID
+    const tempMsgId = Date.now()
+    
+    // 获取当前用户ID（从userStore或其他方式获取）
+    const currentUserId = getCurrentUserId()
+    
+    // 创建待发送的消息对象
+    const chatMessage: ChatMessage = {
+      id: tempMsgId.toString(),
+      fromUserId: currentUserId,
+      toUserId: toUserId,
+      content: content,
+      timestamp: Date.now(),
+      type: 'sent',
+      status: 'pending',
+      msgId: tempMsgId,
+      fromUserAvatar: getUserAvatar(currentUserId)
+    }
+
+    // 获取或创建会话
+    let conversation = conversations.value.get(toUserId)
+    if (!conversation) {
+      conversation = {
+        userId: toUserId,
+        messages: [],
+        unreadCount: 0,
+        lastActiveTime: Date.now()
+      }
+      conversations.value.set(toUserId, conversation)
+    }
+
+    // 立即添加消息到会话（显示为pending状态）
+    conversation.messages.push(chatMessage)
+    conversation.lastMessage = chatMessage
+    conversation.lastActiveTime = Date.now()
+
     try {
-      await client.value.sendPrivateMessage(parseInt(toUserId), content)
+      await client.value.sendPrivateMessage(toUserId, sessionId, content)
+      // 发送成功后更新消息状态
+      const messageIndex = conversation.messages.findIndex(msg => msg.msgId === tempMsgId)
+      if (messageIndex !== -1) {
+        conversation.messages[messageIndex].status = 'sent'
+      }
     } catch (error) {
       console.error('发送消息失败:', error)
+      // 发送失败后更新消息状态
+      const messageIndex = conversation.messages.findIndex(msg => msg.msgId === tempMsgId)
+      if (messageIndex !== -1) {
+        conversation.messages[messageIndex].status = 'failed'
+      }
       throw error
     }
+  }
+
+  // 获取当前用户ID的辅助函数
+  const getCurrentUserId = (): string => {
+    // 从userStore获取当前用户ID
+    const userStore = useUserStore()
+    if (userStore.userInfo?.id) {
+      return userStore.userInfo.id.toString()
+    }
+    
+    // 如果userStore中没有，尝试从localStorage获取
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const userInfo = localStorage.getItem('userInfo')
+      if (userInfo) {
+        try {
+          const user = JSON.parse(userInfo)
+          return user.id?.toString() || 'unknown'
+        } catch (e) {
+          console.error('解析用户信息失败:', e)
+        }
+      }
+    }
+    return 'unknown'
+  }
+
+  // 获取用户头像的辅助函数
+  const getUserAvatar = (userId: string): string => {
+    // 从userStore获取当前用户头像
+    const userStore = useUserStore()
+    if (userStore.userInfo?.id === userId) {
+      return userStore.userInfo.userAvatar || ''
+    }
+    
+    // TODO: 这里可以添加获取其他用户头像的逻辑
+    // 比如从缓存中获取或调用API获取
+    return ''
   }
 
   // 断开连接
@@ -198,37 +252,65 @@ export const useIMStore = defineStore('im', () => {
     currentConversationId.value = null
   }
 
+  // 处理消息发送成功
+  const handleMessageSent = (data: { msgId: number }): void => {
+    console.log('消息发送成功:', data.msgId)
+    
+    // 遍历所有会话，找到对应的消息并更新状态
+    for (const conversation of conversations.value.values()) {
+      const messageIndex = conversation.messages.findIndex(msg => msg.msgId === data.msgId)
+      if (messageIndex !== -1) {
+        conversation.messages[messageIndex].status = 'sent'
+        break
+      }
+    }
+  }
+
+  // 处理消息发送失败
+  const handleMessageFailed = (data: { msgId: number; error: string }): void => {
+    console.error('消息发送失败:', data.msgId, data.error)
+    
+    // 遍历所有会话，找到对应的消息并更新状态
+    for (const conversation of conversations.value.values()) {
+      const messageIndex = conversation.messages.findIndex(msg => msg.msgId === data.msgId)
+      if (messageIndex !== -1) {
+        conversation.messages[messageIndex].status = 'failed'
+        break
+      }
+    }
+  }
+
   // 处理接收到的消息
-  const handleIncomingMessage = (data: { content: string }): void => {
-    // 由于当前IMClient的messageReceived事件只提供content，我们需要从content中解析消息信息
-    // 这里假设content是JSON格式的消息数据
+  const handleMessageReceived = (data: IncomingChatMessage): void => {
     try {
-      const messageData = JSON.parse(data.content)
-      const fromUserId = messageData.fromUserId || messageData.fromUser || 'unknown'
-      const toUserId = messageData.toUserId || messageData.toUser || 'unknown'
-      const msgId = messageData.msgId || Date.now().toString()
-      const content = messageData.content || data.content
+      console.log('接收到消息:', data)
       
-      // 创建聊天消息对象
+      // 获取当前用户ID
+      const currentUserId = getCurrentUserId()
+      
       const chatMessage: ChatMessage = {
-        id: msgId.toString(),
-        fromUserId: fromUserId.toString(),
-        toUserId: toUserId.toString(),
-        content: content,
+        id: data.msgId?.toString() || Date.now().toString(),
+        fromUserId: data.fromUser || 'unknown',
+        toUserId: currentUserId,
+        content: data.content || '',
         timestamp: Date.now(),
-        type: 'received'
+        type: 'received',
+        status: 'sent',
+        msgId: data.msgId || Date.now(),
+        fromUserAvatar: getUserAvatar(data.fromUser)
       }
 
       // 获取或创建会话
-      let conversation = conversations.value.get(fromUserId.toString())
+      const fromUserId = chatMessage.fromUserId
+      let conversation = conversations.value.get(fromUserId)
       if (!conversation) {
         conversation = {
-          userId: fromUserId.toString(),
+          userId: fromUserId,
           messages: [],
           unreadCount: 0,
           lastActiveTime: Date.now()
         }
-        conversations.value.set(fromUserId.toString(), conversation)
+        conversations.value.set(fromUserId, conversation)
       }
 
       // 添加消息到会话
@@ -236,27 +318,20 @@ export const useIMStore = defineStore('im', () => {
       conversation.lastMessage = chatMessage
       conversation.lastActiveTime = Date.now()
       
-      // 如果不是当前会话，增加未读计数
-      if (currentConversationId.value !== fromUserId.toString()) {
+      // 只有当前会话不是发送者时才增加未读计数
+      if (currentConversationId.value !== fromUserId) {
         conversation.unreadCount++
       }
     } catch (error) {
-      console.error('解析接收消息失败:', error)
+      console.error('处理接收消息失败:', error)
     }
-  }
-
-  // 处理发送的消息
-  const handleSentMessage = (data: { msgId: number }): void => {
-    // 由于当前IMClient的messageSent事件只提供msgId，我们需要从本地缓存中获取消息详情
-    // 这里可以根据msgId查找之前发送的消息，或者在发送时缓存消息信息
-    console.log('消息发送成功，msgId:', data.msgId)
   }
 
   // 设置当前会话
   const setCurrentConversation = (userId: string): void => {
     currentConversationId.value = userId
     
-    // 清除该会话的未读计数
+    // 清除未读计数
     const conversation = conversations.value.get(userId)
     if (conversation) {
       conversation.unreadCount = 0
@@ -265,8 +340,7 @@ export const useIMStore = defineStore('im', () => {
 
   // 获取会话列表（按最后活跃时间排序）
   const getConversationList = computed(() => {
-    return Array.from(conversations.value.values())
-      .sort((a, b) => b.lastActiveTime - a.lastActiveTime)
+    return Array.from(conversations.value.values()).sort((a, b) => b.lastActiveTime - a.lastActiveTime)
   })
 
   // 清除会话
@@ -302,6 +376,7 @@ export const useIMStore = defineStore('im', () => {
     
     // 方法
     initialize,
+    initClient,
     connectIM,
     sendMessage,
     disconnect,

@@ -1,47 +1,13 @@
 <template>
   <div class="chat-container">
-    <!-- 左侧会话列表 -->
-    <div class="session-list">
-      <div class="session-header">
-        <h3>聊天列表</h3>
-      </div>
-      <div class="session-items">
-        <div 
-          v-for="session in conversationList" 
-          :key="session.userId"
-          class="session-item"
-          :class="{ active: currentSessionId === session.userId }"
-          @click="selectSession(session.userId)"
-        >
-          <div class="session-avatar">
-            <el-avatar :src="session.userAvatar" :size="40">
-              {{ session.userName?.charAt(0) || '用' }}
-            </el-avatar>
-          </div>
-          <div class="session-info">
-            <div class="session-name">{{ session.userName || `用户${session.userId}` }}</div>
-            <div class="session-last-message">
-              {{ session.lastMessage?.content || '暂无消息' }}
-            </div>
-            <div class="session-time">
-              {{ formatTime(session.lastActiveTime) }}
-            </div>
-          </div>
-          <div class="session-badge" v-if="session.unreadCount > 0">
-            {{ session.unreadCount }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 右侧聊天窗口 -->
+    <!-- 聊天窗口占满整个区域 -->
     <div class="chat-window">
       <div v-if="!currentSessionId" class="empty-chat">
         <div class="empty-content">
           <el-icon size="64" color="#c0c4cc">
             <ChatDotRound />
           </el-icon>
-          <p>请选择一个会话开始聊天</p>
+          <p>正在加载聊天...</p>
         </div>
       </div>
 
@@ -49,11 +15,11 @@
         <!-- 聊天头部 -->
         <div class="chat-header">
           <div class="chat-user-info">
-            <el-avatar :src="currentConversation?.userAvatar" :size="32">
-              {{ currentConversation?.userName?.charAt(0) || '用' }}
+            <el-avatar :src="currentUserInfo?.userAvatar" :size="32">
+              {{ currentUserInfo?.userName?.charAt(0) || currentConversation?.userName?.charAt(0) || '用' }}
             </el-avatar>
             <span class="chat-user-name">
-              {{ currentConversation?.userName || `用户${currentSessionId}` }}
+              {{ currentUserInfo?.userName || currentConversation?.userName || `用户${currentSessionId}` }}
             </span>
           </div>
         </div>
@@ -71,7 +37,20 @@
               :class="{ 'message-sent': message.type === 'sent', 'message-received': message.type === 'received' }"
             >
               <div class="message-content">
-                <div class="message-text">{{ message.content }}</div>
+                <div v-if="message.type === 'sent'" class="message-text-wrapper">
+                  <div class="message-text">{{ message.content }}</div>
+                  <!-- 消息状态指示器 -->
+                  <div class="message-status">
+                    <el-icon v-if="message.status === 'pending'" class="status-loading" color="#909399" :size="14">
+                      <Loading />
+                    </el-icon>
+                    <el-icon v-else-if="message.status === 'failed'" class="status-error" color="#f56c6c" :size="14">
+                      <Warning />
+                    </el-icon>
+                    <span v-else-if="message.status === 'sent'" class="status-sent">✓</span>
+                  </div>
+                </div>
+                <div v-else class="message-text">{{ message.content }}</div>
                 <div class="message-time">{{ formatTime(message.timestamp) }}</div>
               </div>
             </div>
@@ -112,7 +91,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/modules/user'
 import { useIMStore } from '@/store/im'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound } from '@element-plus/icons-vue'
+import { ChatDotRound, Loading, Warning } from '@element-plus/icons-vue'
+import { request } from '@/utils/request'
+import type { UserVO } from '@/types/user'
+
+// 会话信息接口
+interface SessionVO {
+  id: string
+  bookId: string
+  buyerId: string
+  sellerId: string
+  sessionStatus: number
+  expireTime: string
+}
 
 // 路由和状态管理
 const route = useRoute()
@@ -122,15 +113,78 @@ const imStore = useIMStore()
 
 // 响应式数据
 const currentSessionId = ref<string | null>(null)
+const currentSession = ref<SessionVO | null>(null)
+const targetUserId = ref<string | null>(null)
 const messagesLoading = ref(false)
 const sendingMessage = ref(false)
 const messageText = ref('')
 const messagesContainer = ref<HTMLElement>()
+const currentUserInfo = ref<UserVO | null>(null)
 
 // 计算属性
 const conversationList = computed(() => imStore.getConversationList)
 const messages = computed(() => imStore.currentConversation?.messages || [])
 const currentConversation = computed(() => imStore.currentConversation)
+
+// 处理会话信息（从startChat接口返回的SessionVO或路由参数获取）
+const handleSessionInfo = async (sessionVO: SessionVO): Promise<void> => {
+  try {
+    currentSession.value = sessionVO
+    
+    // 使用SessionVO的ID作为当前会话ID，确保与startChat接口返回的ID一致
+    currentSessionId.value = sessionVO.id
+    console.log('设置会话ID:', sessionVO.id, '类型:', typeof sessionVO.id)
+    
+    // 确定目标用户ID（如果当前用户是买家，则目标用户是卖家，反之亦然）
+    const currentUserId = userStore.userInfo?.id?.toString()
+    if (currentUserId === sessionVO.buyerId) {
+      targetUserId.value = sessionVO.sellerId
+    } else if (currentUserId === sessionVO.sellerId) {
+      targetUserId.value = sessionVO.buyerId
+    } else {
+      console.error('当前用户不属于此会话')
+      ElMessage.error('无权访问此会话')
+      router.push('/')
+      return
+    }
+    
+    // 获取目标用户信息
+    if (targetUserId.value) {
+      await fetchUserInfo(targetUserId.value)
+      // 设置IM store的当前会话，使用targetUserId
+      imStore.setCurrentConversation(targetUserId.value)
+    }
+  } catch (error) {
+    console.error('处理会话信息失败:', error)
+    ElMessage.error('处理会话信息失败')
+  }
+}
+
+// 获取会话详情（仅在必要时调用，如直接访问聊天页面）
+const fetchSessionInfo = async (sessionId: string): Promise<void> => {
+  try {
+    const response = await request.get<SessionVO>('/im/session/get', { sessionId })
+    if (response.code === 0 && response.data) {
+      await handleSessionInfo(response.data)
+    }
+  } catch (error) {
+    console.error('获取会话信息失败:', error)
+    ElMessage.error('获取会话信息失败')
+  }
+}
+
+// 获取用户信息
+const fetchUserInfo = async (userId: string): Promise<void> => {
+  try {
+    const response = await request.get<UserVO>('/user/get', { id: userId })
+    if (response.code === 0 && response.data) {
+      currentUserInfo.value = response.data
+    }
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+    // 不显示错误消息，避免影响用户体验
+  }
+}
 
 // 方法定义
 const formatTime = (timestamp: number): string => {
@@ -149,9 +203,12 @@ const formatTime = (timestamp: number): string => {
   }
 }
 
-const selectSession = (userId: string): void => {
-  currentSessionId.value = userId
-  imStore.setCurrentConversation(userId)
+const selectSession = (sessionId: string): void => {
+  console.log('选择会话:', sessionId, '类型:', typeof sessionId);
+  currentSessionId.value = sessionId
+  
+  // 获取会话详情，从中确定目标用户ID
+  fetchSessionInfo(sessionId)
   
   // 滚动到底部
   nextTick(() => {
@@ -166,13 +223,23 @@ const scrollToBottom = (): void => {
 }
 
 const handleSendMessage = async (): Promise<void> => {
-  if (!messageText.value.trim() || !currentSessionId.value) {
+  if (!messageText.value.trim() || !targetUserId.value || !currentSessionId.value) {
+    console.warn('发送消息失败 - 缺少必要参数:', {
+      messageText: messageText.value.trim(),
+      targetUserId: targetUserId.value,
+      currentSessionId: currentSessionId.value
+    });
     return
   }
 
   try {
     sendingMessage.value = true
-    await imStore.sendMessage(currentSessionId.value, messageText.value.trim())
+    console.log('准备发送消息:', {
+      targetUserId: targetUserId.value,
+      currentSessionId: currentSessionId.value,
+      content: messageText.value.trim()
+    });
+    await imStore.sendMessage(targetUserId.value, currentSessionId.value, messageText.value.trim())
     messageText.value = ''
     
     // 滚动到底部
@@ -194,9 +261,9 @@ const handleNewMessage = (data: any): void => {
   })
 }
 
-// 监听路由参数变化
+// 监听路由参数变化（仅在没有SessionVO信息时调用）
 watch(() => route.params.sessionId, (newSessionId) => {
-  if (newSessionId && typeof newSessionId === 'string') {
+  if (newSessionId && typeof newSessionId === 'string' && !history.state?.sessionVO) {
     selectSession(newSessionId)
   }
 }, { immediate: true })
@@ -215,6 +282,7 @@ onMounted(async () => {
     if (!imStore.client) {
       imStore.initialize(userStore.token || '')
     }
+    imStore.initClient()
 
     // 连接IM服务器
     if (!imStore.isReady) {
@@ -226,10 +294,29 @@ onMounted(async () => {
       imStore.client.on('messageReceived', handleNewMessage)
     }
 
-    // 如果有路由参数，选择对应会话
-    const sessionId = route.params.sessionId
-    if (sessionId && typeof sessionId === 'string') {
-      selectSession(sessionId)
+    // 监听消息发送失败事件
+    const handleMessageSendFailed = (event: CustomEvent) => {
+      const { msgId, error } = event.detail
+      console.error('消息发送失败:', { msgId, error })
+      ElMessage.error(`消息发送失败: ${error}`)
+    }
+    
+    window.addEventListener('messageSendFailed', handleMessageSendFailed as EventListener)
+
+    // 检查是否有路由状态传递的SessionVO信息
+    const sessionVO = history.state?.sessionVO
+    if (sessionVO) {
+      // 直接使用传递的SessionVO信息，无需调用getSession接口
+      await handleSessionInfo(sessionVO)
+      console.log('从路由状态设置sessionId:', sessionVO.id, '类型:', typeof sessionVO.id);
+      // handleSessionInfo中已经设置了currentSessionId，这里不需要重复设置
+    } else {
+      // 如果没有SessionVO信息，通过sessionId获取会话详情（兼容直接访问聊天页面的情况）
+      const sessionId = route.params.sessionId
+      if (sessionId && typeof sessionId === 'string') {
+        console.log('从路由参数设置sessionId:', sessionId, '类型:', typeof sessionId);
+        selectSession(sessionId)
+      }
     }
   } catch (error) {
     console.error('初始化聊天失败:', error)
@@ -242,6 +329,15 @@ onUnmounted(() => {
   if (imStore.client) {
     imStore.client.off('messageReceived', handleNewMessage)
   }
+  
+  // 移除消息发送失败事件监听器
+  const handleMessageSendFailed = (event: CustomEvent) => {
+    const { msgId, error } = event.detail
+    console.error('消息发送失败:', { msgId, error })
+    ElMessage.error(`消息发送失败: ${error}`)
+  }
+  
+  window.removeEventListener('messageSendFailed', handleMessageSendFailed as EventListener)
 })
 </script>
 
@@ -250,88 +346,6 @@ onUnmounted(() => {
   display: flex;
   height: 100vh;
   background-color: #f5f5f5;
-}
-
-.session-list {
-  width: 300px;
-  background-color: #fff;
-  border-right: 1px solid #e4e7ed;
-  display: flex;
-  flex-direction: column;
-}
-
-.session-header {
-  padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
-  background-color: #fafafa;
-}
-
-.session-header h3 {
-  margin: 0;
-  font-size: 16px;
-  color: #303133;
-}
-
-.session-items {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.session-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  transition: background-color 0.2s;
-}
-
-.session-item:hover {
-  background-color: #f5f7fa;
-}
-
-.session-item.active {
-  background-color: #ecf5ff;
-}
-
-.session-avatar {
-  margin-right: 12px;
-}
-
-.session-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.session-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: #303133;
-  margin-bottom: 4px;
-}
-
-.session-last-message {
-  font-size: 12px;
-  color: #909399;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 2px;
-}
-
-.session-time {
-  font-size: 11px;
-  color: #c0c4cc;
-}
-
-.session-badge {
-  background-color: #f56c6c;
-  color: white;
-  border-radius: 10px;
-  padding: 2px 6px;
-  font-size: 11px;
-  min-width: 16px;
-  text-align: center;
 }
 
 .chat-window {
@@ -403,20 +417,25 @@ onUnmounted(() => {
 
 .message-item {
   display: flex;
+  margin-bottom: 16px;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.message-item.message-sent {
-  justify-content: flex-end;
+.message-sent {
+  flex-direction: row-reverse;
 }
 
-.message-item.message-received {
-  justify-content: flex-start;
+.message-received {
+  flex-direction: row;
 }
 
 .message-content {
-  max-width: 70%;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  max-width: 70%;
 }
 
 .message-sent .message-content {
@@ -427,31 +446,91 @@ onUnmounted(() => {
   align-items: flex-start;
 }
 
+.message-text-wrapper {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.message-sent .message-text-wrapper {
+  flex-direction: row-reverse;
+}
+
+.message-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+
+.status-loading {
+  animation: rotate 1s linear infinite;
+}
+
+.status-error {
+  cursor: pointer;
+}
+
+.status-sent {
+  color: #67c23a;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .message-text {
-  background-color: #409eff;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.4;
+  padding: 12px 16px;
+  border-radius: 20px;
   word-wrap: break-word;
+  line-height: 1.5;
+  font-size: 14px;
+  max-width: 100%;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.message-sent .message-text {
+  background: linear-gradient(135deg, #409eff 0%, #67c23a 100%);
+  color: white;
+  border-bottom-right-radius: 8px;
 }
 
 .message-received .message-text {
-  background-color: #f0f0f0;
+  background-color: #f8f9fa;
   color: #303133;
+  border: 1px solid #e4e7ed;
+  border-bottom-left-radius: 8px;
 }
 
 .message-time {
   font-size: 11px;
-  color: #c0c4cc;
-  margin-top: 4px;
+  color: #909399;
+  margin-top: 6px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.message-sent .message-time {
+  text-align: right;
+}
+
+.message-received .message-time {
+  text-align: left;
 }
 
 .message-input-container {
   border-top: 1px solid #e4e7ed;
   padding: 16px 20px;
-  background-color: #fafafa;
+  background-color: #fff;
 }
 
 .message-input {

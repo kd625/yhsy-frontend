@@ -250,7 +250,7 @@ const userList = ref<any[]>([])
 // 表单相关
 const formRef = ref<FormInstance>()
 const formData = reactive({
-  id: null as number | null,
+  id: null as string | null,
   userAccount: '',
   userName: '',
   userPassword: '',

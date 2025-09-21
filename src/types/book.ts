@@ -3,8 +3,8 @@
 // 图书基础信息
 export interface Book {
   id: number
-  sellerId: number
-  buyerId: number
+  sellerId: string
+  buyerId: string
   categoryId: number
   bookName: string
   imageUrl: string
@@ -40,8 +40,8 @@ export interface BookListPageRequest {
   pageSize: number
   categoryId?: number
   bookStatus?: number
-  buyerId?: number
-  sellerId?: number
+  buyerId?: string
+  sellerId?: string
   sortField?: string
   sortOrder?: string
 }
@@ -53,8 +53,8 @@ export interface AdminBookListPageRequest {
   sortField?: string
   sortOrder?: string
   id?: number
-  sellerId?: number
-  buyerId?: number
+  sellerId?: string
+  buyerId?: string
   categoryId?: number
   bookName?: string
   imageUrl?: string
@@ -68,11 +68,11 @@ export interface AdminBookListPageRequest {
   updateTime?: string
 }
 
-// 用户预订图书查询请求
+// 用户预订图书请求
 export interface UserOrderedBooksRequest {
   current: number
   pageSize: number
-  buyerId: number
+  buyerId: string
 }
 
 // 图书添加请求

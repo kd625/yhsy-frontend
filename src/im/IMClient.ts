@@ -11,10 +11,11 @@ export const MessageTypes = {
   HEARTBEAT_REQUEST: 'HEARTBEAT_REQUEST',
   HEARTBEAT_RESPONSE: 'HEARTBEAT_RESPONSE',
   
-  // 单聊相关
+  // 聊天相关
   CHAT_SEND_TO_ONE_REQUEST: 'CHAT_SEND_TO_ONE_REQUEST',
   CHAT_SEND_RESPONSE: 'CHAT_SEND_RESPONSE',
   CHAT_REDIRECT_TO_USER_REQUEST: 'CHAT_REDIRECT_TO_USER_REQUEST',
+  CHAT_ERROR_RESPONSE: 'CHAT_ERROR_RESPONSE',
 };
 
 // 连接状态枚举
@@ -61,7 +62,16 @@ export interface AuthResponse {
 // 单聊消息接口
 export interface ChatMessage {
   msgId: number;
-  toUser: number;
+  toUser: string;
+  sessionId: string;
+  content: string;
+}
+
+// 接收到的聊天消息接口 (CHAT_REDIRECT_TO_USER_REQUEST)
+export interface IncomingChatMessage {
+  msgId: number;
+  fromUser: string;
+  sessionId: string;
   content: string;
 }
 
@@ -85,7 +95,7 @@ export type IMClientEvents = Record<string, any> & {
   authFailed: { error: string };
   
   // 消息事件
-  messageReceived: { content: string };
+  messageReceived: IncomingChatMessage;
   messageSent: { msgId: number };
   messageFailed: { msgId: number; error: string };
   
@@ -216,24 +226,41 @@ export class IMClient {
   }
   
   /**
-   * 发送单聊消息
+   * 发送私聊消息
+   * @param toUser 目标用户ID
+   * @param sessionId 会话ID
+   * @param content 消息内容
+   * @returns 消息ID
    */
-  public async sendPrivateMessage(toUser: number, content: string): Promise<number> {
+  public async sendPrivateMessage(toUser: string, sessionId: string, content: string): Promise<number> {
     if (this.authState !== AuthState.AUTHENTICATED) {
       throw new Error('用户未认证');
     }
     
     const msgId = Date.now(); // 使用时间戳作为消息ID
+    
+    // 添加调试日志
+    console.log('发送消息参数:', { toUser, sessionId, content });
+    console.log('sessionId类型:', typeof sessionId, 'sessionId值:', sessionId);
+    
     const chatMessage: ChatMessage = {
       msgId,
       toUser,
+      sessionId,
       content
     };
     
-    this._send({
+    console.log('构建的ChatMessage:', chatMessage);
+    console.log('ChatMessage JSON:', JSON.stringify(chatMessage));
+    
+    const payload = {
       type: MessageTypes.CHAT_SEND_TO_ONE_REQUEST,
       message: JSON.stringify(chatMessage)
-    });
+    };
+    
+    console.log('发送的WebSocket消息:', payload);
+    
+    this._send(payload);
     
     return msgId;
   }
@@ -313,6 +340,7 @@ export class IMClient {
   private handleMessage(data: string): void {
     try {
       const message: WebSocketMessage = JSON.parse(data);
+      console.log('收到消息:', message);
       
       switch (message.type) {
         case MessageTypes.AUTH_RESPONSE:
@@ -331,8 +359,13 @@ export class IMClient {
           this.handleIncomingMessage(message.message);
           break;
           
+        case MessageTypes.CHAT_ERROR_RESPONSE:
+          this.handleChatErrorResponse(message.message);
+          break;
+          
         default:
           console.warn('未知消息类型:', message.type);
+          console.log('可用的消息类型:', Object.values(MessageTypes));
       }
     } catch (error) {
       console.error('消息解析失败:', error);
@@ -392,12 +425,56 @@ export class IMClient {
    */
   private handleIncomingMessage(messageData: string): void {
     try {
-      const incomingMessage = JSON.parse(messageData);
-      this.eventEmitter.emit('messageReceived', {
-        content: incomingMessage.content
-      });
+      // 使用自定义解析器处理大数精度问题
+      const incomingMessage: IncomingChatMessage = this.parseMessageWithBigInt(messageData);
+      console.log('接收到消息:', incomingMessage);
+      this.eventEmitter.emit('messageReceived', incomingMessage);
     } catch (error) {
       console.error('接收消息解析失败:', error);
+    }
+  }
+
+  /**
+   * 自定义消息解析器，处理大数精度问题
+   */
+  private parseMessageWithBigInt(messageData: string): IncomingChatMessage {
+    // 先用正则表达式替换大数字段为字符串格式
+    const processedData = messageData.replace(
+      /"(sessionId|msgId)":(\d+)/g,
+      (match, key, value) => {
+        // 如果数字超过JavaScript安全整数范围，保持为字符串
+        if (value.length > 15 || parseInt(value) > Number.MAX_SAFE_INTEGER) {
+          return `"${key}":"${value}"`;
+        }
+        return match;
+      }
+    );
+    
+    const parsed = JSON.parse(processedData);
+    
+    // 确保返回正确的类型
+    return {
+      msgId: typeof parsed.msgId === 'string' ? parseInt(parsed.msgId) : parsed.msgId,
+      fromUser: parsed.fromUser,
+      sessionId: parsed.sessionId, // 保持为字符串
+      content: parsed.content
+    };
+  }
+  
+  /**
+   * 处理消息发送错误响应
+   */
+  private handleChatErrorResponse(messageData: string): void {
+    try {
+      const errorResponse = JSON.parse(messageData);
+      console.error('收到消息发送错误响应:', errorResponse);
+      
+      this.eventEmitter.emit('messageFailed', {
+        msgId: errorResponse.msgId || 0,
+        error: errorResponse.errorMsg || '系统内部异常'
+      });
+    } catch (error) {
+      console.error('消息错误响应解析失败:', error);
     }
   }
   

@@ -62,7 +62,7 @@
 ```json
 {
   "type": "CHAT_SEND_TO_ONE_REQUEST",
-  "message": "{\"msgId\": 1234567890, \"toUser\": 123, \"content\": \"消息内容\"}"
+  "message": "{\"msgId\": 1234567890, \"toUser\": \"123\", \"sessionId\": \"123\", \"content\": \"消息内容\"}"
 }
 ```
 
@@ -70,7 +70,7 @@
 ```json
 {
   "type": "CHAT_SEND_RESPONSE",
-  "message": "{\"msgId\": 1234567890, \"code\": 0, \"message\": \"发送成功\"}"
+  "message": "{\"msgId\": 1234567890, \"sessionId\": \"123\", \"message\": \"发送成功\"}"
 }
 ```
 

@@ -1,8 +1,8 @@
 // 用户相关类型定义
 
-// 用户视图对象
+// 用户信息接口
 export interface UserVO {
-  id: number
+  id: string
   userName: string
   userAccount: string
   userAvatar: string
@@ -38,7 +38,7 @@ export interface UserAddRequest {
 
 // 用户更新请求
 export interface UserUpdateRequest {
-  id: number
+  id: string
   userName?: string
   userAccount?: string
   userAvatar?: string
@@ -53,9 +53,9 @@ export interface CaptchaVO {
   image: string
 }
 
-// 完整用户信息（包含敏感信息）
+// 用户实体接口
 export interface User {
-  id: number
+  id: string
   userName: string
   userAccount: string
   userAvatar: string

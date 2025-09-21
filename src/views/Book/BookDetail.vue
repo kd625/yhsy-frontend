@@ -197,7 +197,7 @@ const fetchBookDetail = async () => {
 }
 
 // 获取卖家信息
-const fetchSellerInfo = async (sellerId: number) => {
+const fetchSellerInfo = async (sellerId: string) => {
   try {
     const response = await request.get<BaseResponse<UserVO>>(`/user/get`, {
       params: { id: sellerId }

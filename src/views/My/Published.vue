@@ -268,7 +268,7 @@ const handleCurrentChange = (val: number) => {
 }
 
 // 开始聊天
-const startChat = async (buyerId: number) => {
+const startChat = async (buyerId: string) => {
   try {
     // 确保用户已登录
     if (!userStore.isLogin || !userStore.token) {
@@ -302,9 +302,12 @@ const startChat = async (buyerId: number) => {
     })
     
     if (response.code === 0) {
-      const sessionId = response.data.id
-      // 跳转到聊天页面
-      router.push(`/chat/${sessionId}`)
+      const sessionVO = response.data
+      // 跳转到聊天页面，通过路由状态传递SessionVO信息
+      router.push({
+        path: `/chat/${sessionVO.id}`,
+        state: { sessionVO }
+      })
     } else {
       ElMessage.error(response.message || '创建会话失败')
     }
