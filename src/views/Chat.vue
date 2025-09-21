@@ -26,8 +26,7 @@
 
         <!-- 消息列表 -->
         <div class="messages-container" ref="messagesContainer">
-          <div v-if="messagesLoading" class="loading-container">
-            <el-loading />
+          <div v-if="messagesLoading" class="loading-container" v-loading="true" element-loading-text="加载消息中...">
           </div>
           <div v-else class="messages-list">
             <div 
@@ -151,8 +150,14 @@ const handleSessionInfo = async (sessionVO: SessionVO): Promise<void> => {
     // 获取目标用户信息
     if (targetUserId.value) {
       await fetchUserInfo(targetUserId.value)
-      // 设置IM store的当前会话，使用targetUserId
+      // 设置IM store的当前会话，使用targetUserId（对方用户ID）
       imStore.setCurrentConversation(targetUserId.value)
+      console.log('已设置当前会话为:', targetUserId.value)
+      
+      // 确保消息列表滚动到底部
+      nextTick(() => {
+        scrollToBottom()
+      })
     }
   } catch (error) {
     console.error('处理会话信息失败:', error)
@@ -260,6 +265,13 @@ const handleNewMessage = (data: any): void => {
     scrollToBottom()
   })
 }
+
+// 监听消息变化，确保新消息时滚动到底部
+watch(() => messages.value, () => {
+  nextTick(() => {
+    scrollToBottom()
+  })
+}, { deep: true })
 
 // 监听路由参数变化（仅在没有SessionVO信息时调用）
 watch(() => route.params.sessionId, (newSessionId) => {

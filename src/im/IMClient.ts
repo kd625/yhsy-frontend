@@ -16,6 +16,10 @@ export const MessageTypes = {
   CHAT_SEND_RESPONSE: 'CHAT_SEND_RESPONSE',
   CHAT_REDIRECT_TO_USER_REQUEST: 'CHAT_REDIRECT_TO_USER_REQUEST',
   CHAT_ERROR_RESPONSE: 'CHAT_ERROR_RESPONSE',
+  
+  // 已读回执相关
+  CHAT_READ_RECEIPT_REQUEST: 'CHAT_READ_RECEIPT_REQUEST',
+  CHAT_READ_RECEIPT_RESPONSE: 'CHAT_READ_RECEIPT_RESPONSE',
 };
 
 // 连接状态枚举
@@ -70,9 +74,21 @@ export interface ChatMessage {
 // 接收到的聊天消息接口 (CHAT_REDIRECT_TO_USER_REQUEST)
 export interface IncomingChatMessage {
   msgId: number;
-  fromUser: string;
-  sessionId: string;
+  sessionId: string;  // 修改：使用sessionId替代fromUser
   content: string;
+}
+
+// 已读回执请求接口
+export interface ReadReceiptRequest {
+  msgId: number;
+  fromUser: number;
+}
+
+// 已读回执响应接口
+export interface ReadReceiptResponse {
+  msgId: number;
+  code: number;
+  message: string;
 }
 
 // 消息发送响应接口
@@ -98,6 +114,11 @@ export type IMClientEvents = Record<string, any> & {
   messageReceived: IncomingChatMessage;
   messageSent: { msgId: number };
   messageFailed: { msgId: number; error: string };
+  
+  // 已读回执事件
+  readReceiptSent: { msgId: number };
+  readReceiptReceived: { msgId: number };
+  readReceiptFailed: { msgId: number; error: string };
   
   // 心跳事件
   heartbeatSent: void;
@@ -266,6 +287,28 @@ export class IMClient {
   }
   
   /**
+   * 发送已读回执
+   */
+  public async sendReadReceipt(msgId: number, fromUser: number): Promise<void> {
+    if (!this.isConnected() || !this.isAuthenticated()) {
+      throw new Error('WebSocket未连接或未认证');
+    }
+
+    const readReceiptRequest: ReadReceiptRequest = {
+      msgId,
+      fromUser
+    };
+
+    const payload: WebSocketMessage = {
+      type: MessageTypes.CHAT_READ_RECEIPT_REQUEST,
+      message: JSON.stringify(readReceiptRequest)
+    };
+
+    this._send(payload);
+    this.eventEmitter.emit('readReceiptSent', { msgId });
+  }
+
+  /**
    * 发送心跳包
    */
   private sendHeartbeat(): void {
@@ -356,12 +399,16 @@ export class IMClient {
           break;
           
         case MessageTypes.CHAT_REDIRECT_TO_USER_REQUEST:
-          this.handleIncomingMessage(message.message);
-          break;
-          
-        case MessageTypes.CHAT_ERROR_RESPONSE:
-          this.handleChatErrorResponse(message.message);
-          break;
+        this.handleIncomingMessage(message.message);
+        break;
+      
+      case MessageTypes.CHAT_READ_RECEIPT_RESPONSE:
+        this.handleReadReceiptResponse(message.message);
+        break;
+      
+      case MessageTypes.CHAT_ERROR_RESPONSE:
+        this.handleChatErrorResponse(message.message);
+        break;
           
         default:
           console.warn('未知消息类型:', message.type);
@@ -452,15 +499,35 @@ export class IMClient {
     
     const parsed = JSON.parse(processedData);
     
-    // 确保返回正确的类型
+    // 确保返回正确的类型，根据新的接口格式
     return {
       msgId: typeof parsed.msgId === 'string' ? parseInt(parsed.msgId) : parsed.msgId,
-      fromUser: parsed.fromUser,
       sessionId: parsed.sessionId, // 保持为字符串
       content: parsed.content
     };
   }
   
+  /**
+   * 处理已读回执响应
+   */
+  private handleReadReceiptResponse(messageData: string): void {
+    try {
+      const response: ReadReceiptResponse = JSON.parse(messageData);
+      console.log('收到已读回执响应:', response);
+      
+      if (response.code === 0) {
+        this.eventEmitter.emit('readReceiptReceived', { msgId: response.msgId });
+      } else {
+        this.eventEmitter.emit('readReceiptFailed', {
+          msgId: response.msgId,
+          error: response.message || '已读回执发送失败'
+        });
+      }
+    } catch (error) {
+      console.error('已读回执响应解析失败:', error);
+    }
+  }
+
   /**
    * 处理消息发送错误响应
    */

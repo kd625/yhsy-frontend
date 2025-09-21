@@ -288,29 +288,43 @@ export const useIMStore = defineStore('im', () => {
       // 获取当前用户ID
       const currentUserId = getCurrentUserId()
       
+      // 根据sessionId匹配当前会话ID来确定是否显示消息
+      // 只有当接收到的消息的sessionId与当前选中的会话ID一致时，才显示消息
+      if (!currentConversationId.value) {
+        console.log('当前没有选中的会话，忽略消息')
+        return
+      }
+      
+      // 检查sessionId是否与当前会话ID匹配
+      // 注意：这里需要建立sessionId与前端会话ID的映射关系
+      // 暂时使用当前会话的用户ID作为发送者，后续可以根据实际需求调整
+      let targetUserId = currentConversationId.value
+      
+      console.log('消息sessionId:', data.sessionId, '当前会话ID:', currentConversationId.value)
+      console.log('将消息添加到当前会话中')
+      
       const chatMessage: ChatMessage = {
         id: data.msgId?.toString() || Date.now().toString(),
-        fromUserId: data.fromUser || 'unknown',
+        fromUserId: targetUserId, // 使用当前会话的用户ID作为发送者
         toUserId: currentUserId,
         content: data.content || '',
         timestamp: Date.now(),
         type: 'received',
         status: 'sent',
         msgId: data.msgId || Date.now(),
-        fromUserAvatar: getUserAvatar(data.fromUser)
+        fromUserAvatar: getUserAvatar(targetUserId)
       }
 
       // 获取或创建会话
-      const fromUserId = chatMessage.fromUserId
-      let conversation = conversations.value.get(fromUserId)
+      let conversation = conversations.value.get(targetUserId)
       if (!conversation) {
         conversation = {
-          userId: fromUserId,
+          userId: targetUserId,
           messages: [],
           unreadCount: 0,
           lastActiveTime: Date.now()
         }
-        conversations.value.set(fromUserId, conversation)
+        conversations.value.set(targetUserId, conversation)
       }
 
       // 添加消息到会话
@@ -318,10 +332,15 @@ export const useIMStore = defineStore('im', () => {
       conversation.lastMessage = chatMessage
       conversation.lastActiveTime = Date.now()
       
-      // 只有当前会话不是发送者时才增加未读计数
-      if (currentConversationId.value !== fromUserId) {
+      // 只有当消息不是发送给当前选中会话时才增加未读计数
+      if (currentConversationId.value !== targetUserId) {
         conversation.unreadCount++
       }
+      
+      console.log('消息已添加到会话:', targetUserId, '消息内容:', chatMessage.content)
+      console.log('当前会话列表:', Array.from(conversations.value.keys()))
+      console.log('当前选中会话ID:', currentConversationId.value)
+      console.log('消息添加到的会话ID:', targetUserId)
     } catch (error) {
       console.error('处理接收消息失败:', error)
     }
