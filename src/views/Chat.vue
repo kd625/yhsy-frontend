@@ -25,7 +25,29 @@
         </div>
 
         <!-- 消息列表 -->
-        <div class="messages-container" ref="messagesContainer">
+        <div class="messages-container" ref="messagesContainer" @scroll="handleScroll">
+          <!-- 历史消息加载状态 -->
+          <div v-if="isLoadingHistory" class="history-loading">
+            <el-icon class="is-loading">
+              <Loading />
+            </el-icon>
+            <span>加载历史消息中...</span>
+          </div>
+          
+          <!-- 历史消息加载错误 -->
+          <div v-if="historyError" class="history-error">
+            <el-icon color="#f56c6c">
+              <Warning />
+            </el-icon>
+            <span>{{ historyError }}</span>
+            <el-button size="small" type="text" @click="retryLoadHistory">重试</el-button>
+          </div>
+          
+          <!-- 没有更多历史消息提示 -->
+          <div v-if="!hasMoreHistory && messages.length > 0" class="no-more-history">
+            <span>没有更多历史消息了</span>
+          </div>
+          
           <div v-if="messagesLoading" class="loading-container" v-loading="true" element-loading-text="加载消息中...">
           </div>
           <div v-else class="messages-list">
@@ -60,6 +82,7 @@
         <div class="message-input-container">
           <div class="message-input">
             <el-input
+              ref="messageInputRef"
               v-model="messageText"
               type="textarea"
               :rows="3"
@@ -118,12 +141,109 @@ const messagesLoading = ref(false)
 const sendingMessage = ref(false)
 const messageText = ref('')
 const messagesContainer = ref<HTMLElement>()
+const messageInputRef = ref<any>(null)
 const currentUserInfo = ref<UserVO | null>(null)
 
+// 历史消息相关状态
+const isLoadingHistory = ref(false)
+const historyError = ref<string | null>(null)
+const hasMoreHistory = ref(true)
+const isScrollingToBottom = ref(false)
+
 // 计算属性
-const conversationList = computed(() => imStore.getConversationList)
 const messages = computed(() => imStore.currentConversation?.messages || [])
 const currentConversation = computed(() => imStore.currentConversation)
+
+// 滚动监听处理
+const handleScroll = async (): Promise<void> => {
+  if (!messagesContainer.value || isLoadingHistory.value || !hasMoreHistory.value) {
+    return
+  }
+
+  const container = messagesContainer.value
+  const scrollTop = container.scrollTop
+  const threshold = 50 // 距离顶部50px时开始加载
+
+  // 当滚动到接近顶部时，加载更多历史消息
+  if (scrollTop <= threshold && !isScrollingToBottom.value) {
+    await loadMoreHistory()
+  }
+}
+
+// 加载更多历史消息
+const loadMoreHistory = async (): Promise<void> => {
+  if (!currentSessionId.value || isLoadingHistory.value || !hasMoreHistory.value) {
+    return
+  }
+
+  try {
+    isLoadingHistory.value = true
+    historyError.value = null
+    
+    // 记录当前滚动位置
+    const container = messagesContainer.value
+    const scrollHeight = container?.scrollHeight || 0
+    
+    // 调用store中的加载更多历史消息方法
+    await imStore.loadMoreHistory(currentSessionId.value)
+    
+    // 更新状态
+    const conversation = imStore.currentConversation
+    if (conversation) {
+      hasMoreHistory.value = conversation.hasMoreHistory
+      historyError.value = conversation.historyError
+    }
+    
+    // 保持滚动位置
+    nextTick(() => {
+      if (container) {
+        const newScrollHeight = container.scrollHeight
+        const heightDiff = newScrollHeight - scrollHeight
+        container.scrollTop = heightDiff
+      }
+    })
+  } catch (error) {
+    console.error('加载更多历史消息失败:', error)
+    historyError.value = error instanceof Error ? error.message : '加载历史消息失败'
+  } finally {
+    isLoadingHistory.value = false
+  }
+}
+
+// 重试加载历史消息
+const retryLoadHistory = async (): Promise<void> => {
+  historyError.value = null
+  await loadMoreHistory()
+}
+
+// 初始化历史消息
+const initializeHistory = async (): Promise<void> => {
+  if (!currentSessionId.value) return
+  
+  try {
+    messagesLoading.value = true
+    
+    // 调用store中的初始化历史消息方法
+    await imStore.initConversationHistory(currentSessionId.value)
+    
+    // 更新状态
+    const conversation = imStore.currentConversation
+    if (conversation) {
+      hasMoreHistory.value = conversation.hasMoreHistory
+      historyError.value = conversation.historyError
+    }
+    
+    // 滚动到底部
+    nextTick(() => {
+      scrollToBottom()
+    })
+  } catch (error) {
+    console.error('初始化历史消息失败:', error)
+    ElMessage.error('加载历史消息失败')
+  } finally {
+    messagesLoading.value = false
+  }
+}
 
 // 处理会话信息（从startChat接口返回的SessionVO或路由参数获取）
 const handleSessionInfo = async (sessionVO: SessionVO): Promise<void> => {
@@ -154,10 +274,8 @@ const handleSessionInfo = async (sessionVO: SessionVO): Promise<void> => {
       imStore.setCurrentConversation(targetUserId.value)
       console.log('已设置当前会话为:', targetUserId.value)
       
-      // 确保消息列表滚动到底部
-      nextTick(() => {
-        scrollToBottom()
-      })
+      // 初始化历史消息
+      await initializeHistory()
     }
   } catch (error) {
     console.error('处理会话信息失败:', error)
@@ -208,22 +326,22 @@ const formatTime = (timestamp: number): string => {
   }
 }
 
-const selectSession = (sessionId: string): void => {
+const selectSession = async (sessionId: string): Promise<void> => {
   console.log('选择会话:', sessionId, '类型:', typeof sessionId);
   currentSessionId.value = sessionId
   
   // 获取会话详情，从中确定目标用户ID
-  fetchSessionInfo(sessionId)
-  
-  // 滚动到底部
-  nextTick(() => {
-    scrollToBottom()
-  })
+  await fetchSessionInfo(sessionId)
 }
 
 const scrollToBottom = (): void => {
   if (messagesContainer.value) {
+    isScrollingToBottom.value = true
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    // 延迟重置标志，避免滚动事件触发加载更多
+    setTimeout(() => {
+      isScrollingToBottom.value = false
+    }, 100)
   }
 }
 
@@ -247,8 +365,11 @@ const handleSendMessage = async (): Promise<void> => {
     await imStore.sendMessage(targetUserId.value, currentSessionId.value, messageText.value.trim())
     messageText.value = ''
     
-    // 滚动到底部
+    // 重新聚焦到输入框
     nextTick(() => {
+      if (messageInputRef.value) {
+        messageInputRef.value.focus()
+      }
       scrollToBottom()
     })
   } catch (error) {
@@ -259,7 +380,7 @@ const handleSendMessage = async (): Promise<void> => {
   }
 }
 
-const handleNewMessage = (data: any): void => {
+const handleNewMessage = (_data: any): void => {
   // 新消息处理逻辑已在IM Store中实现
   nextTick(() => {
     scrollToBottom()
@@ -356,8 +477,9 @@ onUnmounted(() => {
 <style scoped>
 .chat-container {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 120px); /* 减去header和footer的高度 */
   background-color: #f5f5f5;
+  overflow: hidden; /* 防止整体容器出现滚动条 */
 }
 
 .chat-window {
@@ -365,6 +487,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background-color: #fff;
+  height: 100%; /* 确保占满容器高度 */
+  min-height: 0; /* 确保flex子元素可以正确收缩 */
 }
 
 .empty-chat {
@@ -388,9 +512,13 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100%; /* 确保占满容器高度 */
+  min-height: 0; /* 确保flex子元素可以正确收缩 */
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 .chat-header {
+  flex-shrink: 0; /* 防止头部被压缩 */
   padding: 16px 20px;
   border-bottom: 1px solid #e4e7ed;
   background-color: #fafafa;
@@ -411,7 +539,37 @@ onUnmounted(() => {
 .messages-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden; /* 隐藏水平滚动条 */
   padding: 16px 20px;
+  min-height: 0; /* 确保flex子元素可以正确收缩 */
+  
+  /* 自定义滚动条样式 */
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 transparent;
+}
+
+/* Webkit浏览器滚动条样式 */
+.messages-container::-webkit-scrollbar {
+  width: 8px; /* 增加滚动条宽度，便于操作 */
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  background-color: #c1c1c1;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background-color: #a8a8a8;
+}
+
+.messages-container::-webkit-scrollbar-thumb:active {
+  background-color: #909399;
 }
 
 .loading-container {
@@ -425,6 +583,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: min-content; /* 确保内容高度自适应 */
 }
 
 .message-item {
@@ -432,6 +591,7 @@ onUnmounted(() => {
   margin-bottom: 16px;
   align-items: flex-start;
   gap: 12px;
+  flex-shrink: 0; /* 防止消息项被压缩 */
 }
 
 .message-sent {
@@ -503,11 +663,15 @@ onUnmounted(() => {
   padding: 12px 16px;
   border-radius: 20px;
   word-wrap: break-word;
+  word-break: break-word; /* 强制长单词换行 */
+  overflow-wrap: break-word; /* 现代浏览器的换行属性 */
   line-height: 1.5;
   font-size: 14px;
   max-width: 100%;
   position: relative;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  white-space: pre-wrap; /* 保留换行符和空格 */
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 .message-sent .message-text {
@@ -540,6 +704,7 @@ onUnmounted(() => {
 }
 
 .message-input-container {
+  flex-shrink: 0; /* 防止输入框被压缩 */
   border-top: 1px solid #e4e7ed;
   padding: 16px 20px;
   background-color: #fff;
@@ -554,5 +719,48 @@ onUnmounted(() => {
 .input-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+/* 历史消息相关样式 */
+.history-loading,
+.history-error,
+.no-more-history {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  gap: 8px;
+}
+
+.history-loading {
+  background-color: #f0f9ff;
+  color: #409eff;
+  border: 1px solid #b3d8ff;
+}
+
+.history-error {
+  background-color: #fef0f0;
+  color: #f56c6c;
+  border: 1px solid #fbc4c4;
+}
+
+.no-more-history {
+  background-color: #f5f7fa;
+  color: #909399;
+  border: 1px solid #dcdfe6;
+  font-size: 12px;
+}
+
+.history-loading .el-icon {
+  animation: rotate 1s linear infinite;
+}
+
+.history-error .el-button {
+  margin-left: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 </style>

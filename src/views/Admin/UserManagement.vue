@@ -277,7 +277,7 @@ const formRules: FormRules = {
   checkPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     {
-      validator: (rule, value, callback) => {
+      validator: (_rule, value, callback) => {
         if (value !== formData.userPassword) {
           callback(new Error('两次输入的密码不一致'))
         } else {
@@ -306,7 +306,7 @@ const fetchUserList = async () => {
   try {
     // 过滤空值参数
     const filteredSearchForm = Object.fromEntries(
-      Object.entries(searchForm).filter(([key, value]) => 
+      Object.entries(searchForm).filter(([_key, value]) => 
         value !== null && value !== undefined && value !== ''
       )
     )

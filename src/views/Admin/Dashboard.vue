@@ -114,7 +114,6 @@ import {
 } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { request } from '@/utils/request'
-import { ElMessage } from 'element-plus'
 import { User, Reading } from '@element-plus/icons-vue'
 
 // 注册 ECharts 组件
@@ -162,35 +161,6 @@ const recentActivities = ref([
     time: '2024-01-20 08:45'
   }
 ])
-
-// 获取统计数据（已集成到图表数据获取中，此函数保留用于备用）
-const fetchStats = async () => {
-  try {
-    // 获取用户统计数据
-    const userResponse = await request.get('/admin/user', {
-      begin: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      end: new Date().toISOString().split('T')[0]
-    })
-    
-    if (userResponse.code === 0 && userResponse.data && userResponse.data.totalUserList) {
-      const totalUserList = userResponse.data.totalUserList.split(',')
-      totalUsers.value = parseInt(totalUserList[totalUserList.length - 1]) || 0
-    }
-    
-    // 获取图书统计数据
-    const bookResponse = await request.get('/admin/book/status')
-    
-    if (bookResponse.code === 0 && bookResponse.data) {
-      const data = bookResponse.data
-      totalBooks.value = (data.sellingCount || 0) + (data.orderedCount || 0) + (data.soldCount || 0) + (data.unsoldCount || 0)
-    }
-  } catch (error) {
-    console.error('获取统计数据失败:', error)
-    // 使用模拟数据作为后备
-    totalUsers.value = 1250
-    totalBooks.value = 3680
-  }
-}
 
 // 获取用户数据
 const fetchUserData = async () => {

@@ -3,7 +3,7 @@
 
 import { useIMStore } from '@/store/im'
 import { useUserStore } from '@/store/modules/user'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 
 // 示例1: 在组件中初始化和连接IM
 export function useIMConnection() {
@@ -63,7 +63,9 @@ export function useChat() {
         throw new Error('IM客户端未就绪')
       }
       
-      await imStore.sendMessage(toUserId, content)
+      // 生成或获取sessionId，这里使用简单的方式生成
+      const sessionId = `session_${toUserId}_${Date.now()}`
+      await imStore.sendMessage(toUserId, sessionId, content)
       console.log('消息发送成功')
     } catch (error) {
       console.error('发送消息失败:', error)

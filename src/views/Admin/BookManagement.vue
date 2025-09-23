@@ -339,7 +339,7 @@ const fetchBookList = async () => {
   try {
     // 过滤空值参数
     const filteredSearchForm = Object.fromEntries(
-      Object.entries(searchForm).filter(([key, value]) => 
+      Object.entries(searchForm).filter(([_key, value]) => 
         value !== null && value !== undefined && value !== ''
       )
     )

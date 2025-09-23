@@ -129,10 +129,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
-import { useBookStore } from '@/store/modules/book'
 import { useUserStore } from '@/store/modules/user'
 import type { Book } from '@/types/book'
 import type { UserVO } from '@/types/user'
@@ -140,8 +139,6 @@ import request from '@/utils/request'
 import type { BaseResponse } from '@/types/common'
 
 const route = useRoute()
-const router = useRouter()
-const bookStore = useBookStore()
 const userStore = useUserStore()
 
 // 响应式数据

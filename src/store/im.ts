@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { IMClient } from '@/im/IMClient'
-import type { ChatMessage as IMChatMessage, IncomingChatMessage } from '@/im/IMClient'
+import type { IncomingChatMessage } from '@/im/IMClient'
 import { useUserStore } from '@/store/modules/user'
+import { messageAPI } from '@/utils/request'
+import type { MessagePageQueryRequest, HistoryMessage, MessageContent } from '@/types/common'
 
 // 定义消息发送状态
 export type MessageStatus = 'pending' | 'sent' | 'delivered' | 'failed'
@@ -32,6 +34,11 @@ export interface Conversation {
   unreadCount: number
   lastMessage?: ChatMessage
   lastActiveTime: number
+  // 历史消息相关状态
+  hasMoreHistory: boolean      // 是否还有更多历史消息
+  isLoadingHistory: boolean    // 是否正在加载历史消息
+  historyError: string | null  // 历史消息加载错误
+  oldestMsgId: number | null   // 最早的消息ID，用于分页
 }
 
 // 定义IM Store状态接口
@@ -144,8 +151,34 @@ export const useIMStore = defineStore('im', () => {
     console.log('IM Store 发送消息参数:', { toUserId, sessionId, content });
     console.log('sessionId类型:', typeof sessionId, 'sessionId值:', sessionId);
     
+    // 检查客户端是否存在，如果不存在则尝试初始化
+    if (!client.value) {
+      console.log('IM客户端不存在，尝试初始化...')
+      const userStore = useUserStore()
+      if (userStore.token) {
+        initialize(userStore.token)
+        initClient()
+      } else {
+        throw new Error('用户未登录，无法初始化IM客户端')
+      }
+    }
+
+    // 如果客户端未就绪，尝试连接
+    if (!isReady.value) {
+      console.log('IM客户端未就绪，尝试连接...')
+      try {
+        await connectIM()
+        // 等待一小段时间确保连接和认证完成
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      } catch (error) {
+        console.error('连接IM服务失败:', error)
+        throw new Error('IM客户端连接失败，请刷新页面重试')
+      }
+    }
+
+    // 再次检查客户端状态
     if (!client.value || !isReady.value) {
-      throw new Error('IM客户端未就绪')
+      throw new Error('IM客户端未就绪，请稍后重试')
     }
 
     // 生成临时消息ID
@@ -174,7 +207,11 @@ export const useIMStore = defineStore('im', () => {
         userId: toUserId,
         messages: [],
         unreadCount: 0,
-        lastActiveTime: Date.now()
+        lastActiveTime: Date.now(),
+        hasMoreHistory: true,
+        isLoadingHistory: false,
+        historyError: null,
+        oldestMsgId: null
       }
       conversations.value.set(toUserId, conversation)
     }
@@ -322,7 +359,11 @@ export const useIMStore = defineStore('im', () => {
           userId: targetUserId,
           messages: [],
           unreadCount: 0,
-          lastActiveTime: Date.now()
+          lastActiveTime: Date.now(),
+          hasMoreHistory: true,
+          isLoadingHistory: false,
+          historyError: null,
+          oldestMsgId: null
         }
         conversations.value.set(targetUserId, conversation)
       }
@@ -379,6 +420,165 @@ export const useIMStore = defineStore('im', () => {
     }
   }
 
+  // 将历史消息转换为前端消息格式
+  const convertHistoryMessageToChatMessage = (
+    historyMsg: HistoryMessage, 
+    currentUserId: string, 
+    sessionId: string,
+    index: number
+  ): ChatMessage => {
+    try {
+      // 解析content字段中的JSON字符串
+      const messageContent: MessageContent = JSON.parse(historyMsg.content)
+      
+      // 使用解析后的msgId作为消息ID
+      const messageId = messageContent.msgId?.toString() || `history_${sessionId}_${index}_${new Date(historyMsg.sendTime).getTime()}`
+      
+      // 根据sessionId判断消息类型（这里需要根据实际业务逻辑调整）
+      // 暂时通过比较sessionId和当前用户ID来判断
+      const isFromCurrentUser = messageContent.sessionId === currentUserId
+      
+      return {
+        id: messageId,
+        fromUserId: isFromCurrentUser ? currentUserId : messageContent.sessionId,
+        toUserId: isFromCurrentUser ? messageContent.sessionId : currentUserId,
+        content: messageContent.content, // 使用解析后的实际消息内容
+        timestamp: new Date(historyMsg.sendTime).getTime(),
+        type: isFromCurrentUser ? 'sent' : 'received',
+        status: 'sent',
+        msgId: messageContent.msgId,
+        fromUserAvatar: ''
+      }
+    } catch (error) {
+      console.error('解析历史消息content失败:', error, historyMsg.content)
+      // 如果解析失败，使用原始content
+      const messageId = `history_${sessionId}_${index}_${new Date(historyMsg.sendTime).getTime()}`
+      return {
+        id: messageId,
+        fromUserId: 'unknown',
+        toUserId: currentUserId,
+        content: historyMsg.content, // 使用原始content
+        timestamp: new Date(historyMsg.sendTime).getTime(),
+        type: 'received',
+        status: 'sent',
+        fromUserAvatar: ''
+      }
+    }
+  }
+
+  // 加载历史消息
+  const loadMessageHistory = async (sessionId: string, pageSize: number = 10, startMsgId?: number): Promise<void> => {
+    const currentUserId = getCurrentUserId()
+    const conversationId = currentUserId // 这里需要根据实际情况调整会话ID的映射
+    
+    // 获取或创建会话
+    let conversation = conversations.value.get(conversationId)
+    if (!conversation) {
+      conversation = {
+        userId: conversationId,
+        messages: [],
+        unreadCount: 0,
+        lastActiveTime: Date.now(),
+        hasMoreHistory: true,
+        isLoadingHistory: false,
+        historyError: null,
+        oldestMsgId: null
+      }
+      conversations.value.set(conversationId, conversation)
+    }
+
+    // 设置加载状态
+    conversation.isLoadingHistory = true
+    conversation.historyError = null
+
+    try {
+      const request: MessagePageQueryRequest = {
+        sessionId: sessionId,
+        current: 1,
+        pageSize: pageSize,
+        startMsgId: startMsgId
+      }
+
+      const response = await messageAPI.getMessageHistory(request)
+      
+      if (response.code === 0 && response.data) {
+        // 接口返回的是数组，直接使用
+        const historyMessages = Array.isArray(response.data) ? response.data : []
+        
+        // 转换消息格式 - 使用新的历史消息转换函数
+        const chatMessages = historyMessages.map((msg, index) => 
+          convertHistoryMessageToChatMessage(msg, currentUserId, sessionId, index)
+        )
+
+        if (chatMessages.length > 0) {
+          // 按时间排序（最新的在后面）
+          chatMessages.sort((a, b) => a.timestamp - b.timestamp)
+          
+          // 如果是首次加载，直接设置消息
+          if (!startMsgId) {
+            conversation.messages = chatMessages
+          } else {
+            // 如果是加载更多，将新消息插入到开头
+            conversation.messages = [...chatMessages, ...conversation.messages]
+          }
+
+          // 由于历史消息没有msgId，我们使用时间戳作为标识
+          const oldestTimestamp = Math.min(...chatMessages.map(msg => msg.timestamp))
+          conversation.oldestMsgId = oldestTimestamp
+          
+          // 检查是否还有更多历史消息
+          conversation.hasMoreHistory = historyMessages.length === pageSize
+        } else {
+          conversation.hasMoreHistory = false
+        }
+      } else {
+        throw new Error(response.message || '加载历史消息失败')
+      }
+    } catch (error) {
+      console.error('加载历史消息失败:', error)
+      conversation.historyError = error instanceof Error ? error.message : '加载历史消息失败'
+    } finally {
+      conversation.isLoadingHistory = false
+    }
+  }
+
+  // 加载更多历史消息
+  const loadMoreHistory = async (sessionId: string): Promise<void> => {
+    const currentUserId = getCurrentUserId()
+    const conversationId = currentUserId
+    const conversation = conversations.value.get(conversationId)
+    
+    if (!conversation || !conversation.hasMoreHistory || conversation.isLoadingHistory) {
+      return
+    }
+
+    await loadMessageHistory(sessionId, 10, conversation.oldestMsgId || undefined)
+  }
+
+  // 初始化会话历史消息
+  const initConversationHistory = async (sessionId: string): Promise<void> => {
+    await loadMessageHistory(sessionId, 10)
+  }
+
+  // 获取或创建会话 - 更新版本
+  const getOrCreateConversation = (userId: string): Conversation => {
+    let conversation = conversations.value.get(userId)
+    if (!conversation) {
+      conversation = {
+        userId: userId,
+        messages: [],
+        unreadCount: 0,
+        lastActiveTime: Date.now(),
+        hasMoreHistory: true,
+        isLoadingHistory: false,
+        historyError: null,
+        oldestMsgId: null
+      }
+      conversations.value.set(userId, conversation)
+    }
+    return conversation
+  }
+
   return {
     // 状态
     client: computed(() => client.value),
@@ -401,6 +601,12 @@ export const useIMStore = defineStore('im', () => {
     disconnect,
     setCurrentConversation,
     clearConversation,
-    updateConversationUserInfo
+    updateConversationUserInfo,
+    
+    // 历史消息相关方法
+    loadMessageHistory,
+    loadMoreHistory,
+    initConversationHistory,
+    getOrCreateConversation
   }
 })

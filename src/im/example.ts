@@ -69,7 +69,7 @@ imClient.on('error', (data) => {
 // 发送测试消息的函数
 async function sendTestMessage() {
   try {
-    const msgId = await imClient.sendPrivateMessage(123, 'Hello, this is a test message!');
+    const msgId = await imClient.sendPrivateMessage('123', 'test-session-id', 'Hello, this is a test message!');
     console.log(`消息已发送，msgId: ${msgId}`);
   } catch (error) {
     console.error('发送消息失败:', error);

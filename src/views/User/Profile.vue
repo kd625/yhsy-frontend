@@ -171,7 +171,6 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { User } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
@@ -179,8 +178,7 @@ import FileUpload from '@/components/Common/FileUpload.vue'
 import { request } from '@/utils/request'
 import type { UserUpdateRequest } from '@/types/user'
 
-// 路由和状态管理
-const router = useRouter()
+// 状态管理
 const userStore = useUserStore()
 
 // 表单引用

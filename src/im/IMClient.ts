@@ -189,7 +189,7 @@ export class IMClient {
           resolve();
         };
         
-        const onError = (event: Event) => {
+        const onError = (_event: Event) => {
           this.ws?.removeEventListener('open', onOpen);
           this.ws?.removeEventListener('error', onError);
           reject(new Error('WebSocket连接失败'));

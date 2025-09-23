@@ -61,14 +61,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ZoomIn,
   Delete,
   Download,
-  Picture,
-  Plus
+  Picture
 } from '@element-plus/icons-vue'
 
 // Props 定义
@@ -133,16 +132,6 @@ const emit = defineEmits<Emits>()
 const previewVisible = ref(false)
 
 // 计算属性
-const containerStyle = computed(() => ({
-  width: typeof props.width === 'number' ? `${props.width}px` : props.width,
-  height: typeof props.height === 'number' ? `${props.height}px` : props.height,
-  borderRadius: props.borderRadius
-}))
-
-const imageStyle = computed(() => ({
-  objectFit: props.fit
-}))
-
 // 方法
 const handleClick = () => {
   if (props.clickable) {

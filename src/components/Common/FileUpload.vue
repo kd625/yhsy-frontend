@@ -57,19 +57,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Plus,
-  Upload,
   Loading,
   Document,
   Delete
 } from '@element-plus/icons-vue'
 import type { UploadProps, UploadUserFile, UploadFile } from 'element-plus'
-import { request } from '@/utils/request'
 import { getSaToken } from '@/utils/auth'
-import type { BaseResponse } from '@/types/common'
 
 // Props 定义
 interface Props {

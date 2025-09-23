@@ -3,6 +3,7 @@ import type { InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 import { getSaToken, clearAuth } from '@/utils/auth'
+import type { MessagePageQueryRequest, MessageHistoryResponse } from '@/types/common'
 
 // 基础响应接口
 export interface BaseResponse<T = any> {
@@ -50,7 +51,7 @@ service.interceptors.request.use(
 // 响应拦截器
 service.interceptors.response.use(
   (response: AxiosResponse<BaseResponse>) => {
-    const { code, data, message } = response.data
+    const { code, message } = response.data
     
     // 请求成功
     if (code === 0) {
@@ -117,6 +118,14 @@ export const request = {
   
   delete<T = any>(url: string, params?: any): Promise<BaseResponse<T>> {
     return service.delete(url, { params }).then(res => res.data)
+  }
+}
+
+// IM历史消息API
+export const messageAPI = {
+  // 获取历史消息
+  getMessageHistory(params: MessagePageQueryRequest): Promise<BaseResponse<MessageHistoryResponse>> {
+    return request.post('/im/message/history', params)
   }
 }
 

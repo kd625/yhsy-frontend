@@ -174,16 +174,6 @@ const refreshCaptcha = () => {
   getCaptcha()
 }
 
-// 重置表单
-const resetForm = () => {
-  if (loginFormRef.value) {
-    loginFormRef.value.resetFields()
-  }
-  // 重置验证码
-  captchaImage.value = ''
-  loginForm.captchaKey = ''
-}
-
 // 组件挂载时获取验证码
 onMounted(() => {
   getCaptcha()

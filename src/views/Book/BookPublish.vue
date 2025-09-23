@@ -155,15 +155,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Loading } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useBookStore } from '@/store/modules/book'
-import { request } from '@/utils/request'
 import type { BookAddRequest } from '@/types/book'
-import type { BaseResponse } from '@/types/common'
 import FileUpload from '@/components/Common/FileUpload.vue'
 import ImagePreview from '@/components/Common/ImagePreview.vue'
 

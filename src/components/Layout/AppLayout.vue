@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Reading, User, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -331,7 +331,8 @@ onMounted(() => {
 .app-main {
   background-color: #f5f7fa;
   min-height: calc(100vh - 120px);
-  padding: 20px;
+  padding: 0; /* 移除padding，让Chat组件完全控制自己的布局 */
+  overflow: hidden; /* 防止主容器出现滚动条 */
 }
 
 .app-footer {

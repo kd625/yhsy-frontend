@@ -115,23 +115,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useBookStore } from '@/store/modules/book'
-import { useUserStore } from '@/store/modules/user'
 import type { BookSearchRequest } from '@/types/book'
 
 const router = useRouter()
 const bookStore = useBookStore()
-const userStore = useUserStore()
 
 // 搜索相关状态
-const searchType = ref<'book' | 'text'>('book')
 const searchKeyword = ref('')
 const selectedCategory = ref<number | ''>('')
 const selectedPriceRange = ref('')
-const selectedStatus = ref<number | ''>('')
+const selectedStatus = ref<number | ''>()
 
 // 获取当前显示的图书列表
 const getCurrentList = () => {
@@ -178,15 +175,6 @@ const clearSearch = () => {
 // 跳转到图书详情
 const goToBookDetail = (bookId: number) => {
   router.push(`/book/${bookId}`)
-}
-
-// 加载更多
-const loadMore = async () => {
-  try {
-    await bookStore.loadMore()
-  } catch (error) {
-    ElMessage.error('加载失败，请重试')
-  }
 }
 
 // 格式化价格

@@ -99,7 +99,7 @@ const registerFormRef = ref<FormInstance>()
 const loading = ref(false)
 
 // 确认密码验证
-const validatePassword = (rule: any, value: any, callback: any) => {
+const validatePassword = (_rule: any, value: any, callback: any) => {
   if (value === '') {
     callback(new Error('请再次输入密码'))
   } else if (value !== registerForm.userPassword) {
@@ -110,7 +110,7 @@ const validatePassword = (rule: any, value: any, callback: any) => {
 }
 
 // 用户名验证
-const validateUserName = (rule: any, value: any, callback: any) => {
+const validateUserName = (_rule: any, value: any, callback: any) => {
   if (value === '') {
     callback(new Error('请输入用户名'))
   } else if (!/^[\u4e00-\u9fa5a-zA-Z0-9_]+$/.test(value)) {
@@ -121,7 +121,7 @@ const validateUserName = (rule: any, value: any, callback: any) => {
 }
 
 // 密码强度验证
-const validatePasswordStrength = (rule: any, value: any, callback: any) => {
+const validatePasswordStrength = (_rule: any, value: any, callback: any) => {
   if (value === '') {
     callback(new Error('请输入密码'))
   } else if (!/^(?=.*[a-zA-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,16}$/.test(value)) {
@@ -179,13 +179,6 @@ const handleRegister = async () => {
     ElMessage.error('注册失败，请重试')
   } finally {
     loading.value = false
-  }
-}
-
-// 重置表单
-const resetForm = () => {
-  if (registerFormRef.value) {
-    registerFormRef.value.resetFields()
   }
 }
 </script>
