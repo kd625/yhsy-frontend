@@ -156,7 +156,7 @@ export class IMClient {
   private shouldReconnect: boolean = true;
   
   constructor(options: IMClientOptions) {
-    this.url = options.url || 'ws://localhost:8888/websocket';
+    this.url = options.url || 'ws://114.132.232.212:8888/websocket';
     this.accessToken = options.accessToken;
     this.heartbeatInterval = options.heartbeatInterval || 30000; // 30秒
     this.reconnectDelay = options.reconnectDelay || 1000; // 1秒

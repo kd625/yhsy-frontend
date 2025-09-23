@@ -14,7 +14,7 @@ export interface BaseResponse<T = any> {
 
 // 创建axios实例
 const service: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://114.132.232.212:8080',
   timeout: 10000
 })
 

@@ -79,8 +79,7 @@
     <!-- 底部页脚 -->
     <el-footer class="app-footer">
       <div class="footer-content">
-        <p>&copy; 2024 砚湖书影</p>
-        <p class="footer-desc">让知识在这里流转，让书香在此传递</p>
+        <p>砚湖书影 蜀ICP备2025163038号-1</p>
       </div>
     </el-footer>
   </el-container>
@@ -339,7 +338,7 @@ onMounted(() => {
   background-color: #303133;
   color: #fff;
   text-align: center;
-  padding: 20px;
+  padding: 10px;
   height: auto;
 }
 

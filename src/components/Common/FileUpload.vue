@@ -99,7 +99,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  action: 'http://localhost:8080/file/upload',
+  action: 'http://114.132.232.212:8080/file/upload',
   accept: '*',
   multiple: false,
   limit: 1,
