@@ -156,23 +156,65 @@ const currentConversation = computed(() => imStore.currentConversation)
 
 // 滚动监听处理
 const handleScroll = async (): Promise<void> => {
-  if (!messagesContainer.value || isLoadingHistory.value || !hasMoreHistory.value) {
+  if (!messagesContainer.value) {
+    console.log('handleScroll: messagesContainer 不存在')
     return
   }
 
   const container = messagesContainer.value
   const scrollTop = container.scrollTop
+  const containerHeight = container.clientHeight
+  const scrollHeight = container.scrollHeight
   const threshold = 50 // 距离顶部50px时开始加载
+
+  // 详细的滚动调试日志
+  console.log('=== 滚动事件触发 ===')
+  console.log('scrollTop:', scrollTop)
+  console.log('containerHeight:', containerHeight) 
+  console.log('scrollHeight:', scrollHeight)
+  console.log('threshold:', threshold)
+  console.log('isLoadingHistory:', isLoadingHistory.value)
+  console.log('hasMoreHistory:', hasMoreHistory.value)
+  console.log('isScrollingToBottom:', isScrollingToBottom.value)
+  console.log('距离顶部距离:', scrollTop)
+  console.log('是否接近顶部:', scrollTop <= threshold)
+
+  // 检查加载条件
+  if (isLoadingHistory.value) {
+    console.log('跳过加载：正在加载历史消息')
+    return
+  }
+  
+  if (!hasMoreHistory.value) {
+    console.log('跳过加载：没有更多历史消息')
+    return
+  }
 
   // 当滚动到接近顶部时，加载更多历史消息
   if (scrollTop <= threshold && !isScrollingToBottom.value) {
+    console.log('🚀 触发加载更多历史消息！')
+    console.log('触发条件 - scrollTop:', scrollTop, '≤ threshold:', threshold)
     await loadMoreHistory()
+  } else {
+    console.log('未触发加载，原因:')
+    if (scrollTop > threshold) {
+      console.log('- 距离顶部太远:', scrollTop, '>', threshold)
+    }
+    if (isScrollingToBottom.value) {
+      console.log('- 正在滚动到底部')
+    }
   }
+  console.log('=== 滚动事件结束 ===\n')
 }
 
 // 加载更多历史消息
 const loadMoreHistory = async (): Promise<void> => {
   if (!currentSessionId.value || isLoadingHistory.value || !hasMoreHistory.value) {
+    console.log('跳过加载更多历史消息:', {
+      currentSessionId: currentSessionId.value,
+      isLoadingHistory: isLoadingHistory.value,
+      hasMoreHistory: hasMoreHistory.value
+    })
     return
   }
 
@@ -180,18 +222,44 @@ const loadMoreHistory = async (): Promise<void> => {
     isLoadingHistory.value = true
     historyError.value = null
     
+    // 获取当前最早的消息ID作为查询参数
+    const conversation = imStore.currentConversation
+    const lastMessageId = conversation?.messages?.[0]?.id || null
+    
+    // 调试日志：输出请求参数
+    console.log('正在请求历史消息，参数:', {
+      sessionId: currentSessionId.value,
+      before: lastMessageId,
+      limit: 20
+    })
+    
     // 记录当前滚动位置
     const container = messagesContainer.value
     const scrollHeight = container?.scrollHeight || 0
     
+    // 记录更新前的消息数量
+    const messagesBefore = messages.value.length
+    console.log('更新前消息数量:', messagesBefore)
+    
     // 调用store中的加载更多历史消息方法
-    await imStore.loadMoreHistory(currentSessionId.value)
+    const response = await imStore.loadMoreHistory(currentSessionId.value)
+    
+    // 调试日志：输出响应结果
+    console.log('收到历史消息响应:', response)
     
     // 更新状态
-    const conversation = imStore.currentConversation
     if (conversation) {
       hasMoreHistory.value = conversation.hasMoreHistory
       historyError.value = conversation.historyError
+    }
+    
+    // 记录更新后的消息数量
+    const messagesAfter = messages.value.length
+    console.log('更新后消息数量:', messagesAfter)
+    
+    // 如果没有新增消息，输出警告
+    if (messagesAfter === messagesBefore) {
+      console.warn('未返回历史消息，可能已到达最早记录')
     }
     
     // 保持滚动位置
@@ -200,6 +268,7 @@ const loadMoreHistory = async (): Promise<void> => {
         const newScrollHeight = container.scrollHeight
         const heightDiff = newScrollHeight - scrollHeight
         container.scrollTop = heightDiff
+        console.log('调整滚动位置，高度差:', heightDiff, '新滚动位置:', container.scrollTop)
       }
     })
   } catch (error) {
@@ -218,12 +287,18 @@ const retryLoadHistory = async (): Promise<void> => {
 
 // 初始化历史消息
 const initializeHistory = async (): Promise<void> => {
-  if (!currentSessionId.value) return
+  if (!currentSessionId.value) {
+    console.log('initializeHistory: 没有当前会话ID，跳过初始化')
+    return
+  }
+  
+  console.log('开始初始化历史消息，sessionId:', currentSessionId.value)
   
   try {
     messagesLoading.value = true
     
     // 调用store中的初始化历史消息方法
+    console.log('调用 imStore.initConversationHistory')
     await imStore.initConversationHistory(currentSessionId.value)
     
     // 更新状态
@@ -231,6 +306,9 @@ const initializeHistory = async (): Promise<void> => {
     if (conversation) {
       hasMoreHistory.value = conversation.hasMoreHistory
       historyError.value = conversation.historyError
+      console.log('历史消息初始化完成，消息数量:', conversation.messages.length, '是否有更多:', hasMoreHistory.value)
+    } else {
+      console.warn('初始化后未找到当前会话')
     }
     
     // 滚动到底部
@@ -380,8 +458,14 @@ const handleSendMessage = async (): Promise<void> => {
   }
 }
 
-const handleNewMessage = (_data: any): void => {
-  // 新消息处理逻辑已在IM Store中实现
+// 处理新消息（从WebSocket接收）
+const handleNewMessage = (message: any): void => {
+  console.log('Chat.vue 收到新消息:', message)
+  
+  // 让IM Store自己处理消息，包括去重逻辑
+  // IM Store已经有完整的消息处理和去重机制
+  
+  // 滚动到底部
   nextTick(() => {
     scrollToBottom()
   })
@@ -477,18 +561,18 @@ onUnmounted(() => {
 <style scoped>
 .chat-container {
   display: flex;
-  height: calc(100vh - 120px); /* 减去header和footer的高度 */
+  flex-direction: column;
+  height: 100vh; /* 占满整个视口高度 */
+  overflow: hidden; /* 防止整个页面滚动 */
   background-color: #f5f5f5;
-  overflow: hidden; /* 防止整体容器出现滚动条 */
 }
 
 .chat-window {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #fff;
-  height: 100%; /* 确保占满容器高度 */
-  min-height: 0; /* 确保flex子元素可以正确收缩 */
+  height: 100%;
+  overflow: hidden; /* 防止窗口本身滚动 */
 }
 
 .empty-chat {
@@ -522,6 +606,7 @@ onUnmounted(() => {
   padding: 16px 20px;
   border-bottom: 1px solid #e4e7ed;
   background-color: #fafafa;
+  z-index: 10; /* 确保头部在上层 */
 }
 
 .chat-user-info {
@@ -538,10 +623,11 @@ onUnmounted(() => {
 
 .messages-container {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: auto; /* 只允许垂直滚动 */
   overflow-x: hidden; /* 隐藏水平滚动条 */
   padding: 16px 20px;
   min-height: 0; /* 确保flex子元素可以正确收缩 */
+  scroll-behavior: smooth; /* 平滑滚动 */
   
   /* 自定义滚动条样式 */
   scrollbar-width: thin;

@@ -317,6 +317,32 @@ export const useIMStore = defineStore('im', () => {
     }
   }
 
+  // 解析消息内容的统一函数
+  const parseMessageContent = (content: string): string => {
+    if (typeof content !== 'string') {
+      return String(content || '')
+    }
+    
+    try {
+      const contentObj = JSON.parse(content)
+      // 检查是否是嵌套的JSON结构
+      if (contentObj.content) {
+        return String(contentObj.content)
+      } else {
+        return content
+      }
+    } catch (e) {
+      // 如果解析失败，使用原始内容
+      return content
+    }
+  }
+
+  // 检查消息是否已存在的函数
+  const isMessageExists = (conversation: Conversation, msgId: string | number): boolean => {
+    const messageId = String(msgId)
+    return conversation.messages.some(msg => msg.id === messageId || String(msg.msgId) === messageId)
+  }
+
   // 处理接收到的消息
   const handleMessageReceived = (data: IncomingChatMessage): void => {
     try {
@@ -326,32 +352,18 @@ export const useIMStore = defineStore('im', () => {
       const currentUserId = getCurrentUserId()
       
       // 根据sessionId匹配当前会话ID来确定是否显示消息
-      // 只有当接收到的消息的sessionId与当前选中的会话ID一致时，才显示消息
       if (!currentConversationId.value) {
         console.log('当前没有选中的会话，忽略消息')
         return
       }
       
-      // 检查sessionId是否与当前会话ID匹配
-      // 注意：这里需要建立sessionId与前端会话ID的映射关系
-      // 暂时使用当前会话的用户ID作为发送者，后续可以根据实际需求调整
+      // 获取当前会话的用户ID（对方用户ID）
       let targetUserId = currentConversationId.value
       
       console.log('消息sessionId:', data.sessionId, '当前会话ID:', currentConversationId.value)
-      console.log('将消息添加到当前会话中')
       
-      const chatMessage: ChatMessage = {
-        id: data.msgId?.toString() || Date.now().toString(),
-        fromUserId: targetUserId, // 使用当前会话的用户ID作为发送者
-        toUserId: currentUserId,
-        content: data.content || '',
-        timestamp: Date.now(),
-        type: 'received',
-        status: 'sent',
-        msgId: data.msgId || Date.now(),
-        fromUserAvatar: getUserAvatar(targetUserId)
-      }
-
+      const normalizedMsgId = String(data.msgId || Date.now())
+      
       // 获取或创建会话
       let conversation = conversations.value.get(targetUserId)
       if (!conversation) {
@@ -368,6 +380,27 @@ export const useIMStore = defineStore('im', () => {
         conversations.value.set(targetUserId, conversation)
       }
 
+      // 检查消息是否已存在，避免重复显示
+      if (isMessageExists(conversation, normalizedMsgId)) {
+        console.log('消息已存在，跳过添加:', normalizedMsgId)
+        return
+      }
+      
+      const parsedContent = parseMessageContent(data.content || '')
+      
+      // 实时消息统一处理为接收的消息（从对方发送给当前用户）
+      const chatMessage: ChatMessage = {
+        id: normalizedMsgId,
+        fromUserId: targetUserId, // 发送者是对方用户
+        toUserId: currentUserId,  // 接收者是当前用户
+        content: parsedContent,
+        timestamp: Date.now(),
+        type: 'received',
+        status: 'sent',
+        msgId: data.msgId || Date.now(),
+        fromUserAvatar: getUserAvatar(targetUserId)
+      }
+
       // 添加消息到会话
       conversation.messages.push(chatMessage)
       conversation.lastMessage = chatMessage
@@ -379,9 +412,6 @@ export const useIMStore = defineStore('im', () => {
       }
       
       console.log('消息已添加到会话:', targetUserId, '消息内容:', chatMessage.content)
-      console.log('当前会话列表:', Array.from(conversations.value.keys()))
-      console.log('当前选中会话ID:', currentConversationId.value)
-      console.log('消息添加到的会话ID:', targetUserId)
     } catch (error) {
       console.error('处理接收消息失败:', error)
     }
@@ -428,46 +458,52 @@ export const useIMStore = defineStore('im', () => {
     index: number
   ): ChatMessage => {
     try {
-      // 解析content字段中的JSON字符串
-      const messageContent: MessageContent = JSON.parse(historyMsg.content)
+      // 后端返回的content已经是直接的字符串，不需要JSON解析
+      const content = historyMsg.content || ''
       
-      // 使用解析后的msgId作为消息ID
-      const messageId = messageContent.msgId?.toString() || `history_${sessionId}_${index}_${new Date(historyMsg.sendTime).getTime()}`
+      // 使用时间戳和索引生成消息ID
+      const messageId = `history_${sessionId}_${index}_${new Date(historyMsg.sendTime).getTime()}`
       
-      // 根据sessionId判断消息类型（这里需要根据实际业务逻辑调整）
-      // 暂时通过比较sessionId和当前用户ID来判断
-      const isFromCurrentUser = messageContent.sessionId === currentUserId
+      // 根据senderId判断消息发送者
+      const senderId = historyMsg.senderId || 'unknown'
+      const isFromCurrentUser = senderId === currentUserId
+      
+      // 获取对方用户ID（当前会话ID就是对方用户ID）
+      const otherUserId = currentConversationId.value || 'unknown'
       
       return {
         id: messageId,
-        fromUserId: isFromCurrentUser ? currentUserId : messageContent.sessionId,
-        toUserId: isFromCurrentUser ? messageContent.sessionId : currentUserId,
-        content: messageContent.content, // 使用解析后的实际消息内容
+        fromUserId: isFromCurrentUser ? currentUserId : otherUserId,
+        toUserId: isFromCurrentUser ? otherUserId : currentUserId,
+        content: content, // 直接使用content，不需要解析
         timestamp: new Date(historyMsg.sendTime).getTime(),
         type: isFromCurrentUser ? 'sent' : 'received',
         status: 'sent',
-        msgId: messageContent.msgId,
+        msgId: Date.now(), // 生成一个临时的数字ID
         fromUserAvatar: ''
       }
     } catch (error) {
-      console.error('解析历史消息content失败:', error, historyMsg.content)
-      // 如果解析失败，使用原始content
-      const messageId = `history_${sessionId}_${index}_${new Date(historyMsg.sendTime).getTime()}`
+      console.error('转换历史消息失败:', error, historyMsg)
+      // 如果转换失败，创建一个默认消息
+      const messageId = `history_error_${sessionId}_${index}_${Date.now()}`
+      const otherUserId = currentConversationId.value || 'unknown'
+      
       return {
         id: messageId,
-        fromUserId: 'unknown',
+        fromUserId: otherUserId,
         toUserId: currentUserId,
-        content: historyMsg.content, // 使用原始content
+        content: historyMsg.content || '消息解析失败',
         timestamp: new Date(historyMsg.sendTime).getTime(),
         type: 'received',
         status: 'sent',
+        msgId: Date.now(),
         fromUserAvatar: ''
       }
     }
   }
 
   // 加载历史消息
-  const loadMessageHistory = async (sessionId: string, pageSize: number = 10, startMsgId?: number): Promise<void> => {
+  const loadMessageHistory = async (sessionId: string, pageSize: number = 10, startMsgId?: number): Promise<any> => {
     const currentUserId = getCurrentUserId()
     const conversationId = currentUserId // 这里需要根据实际情况调整会话ID的映射
     
@@ -514,12 +550,15 @@ export const useIMStore = defineStore('im', () => {
           // 按时间排序（最新的在后面）
           chatMessages.sort((a, b) => a.timestamp - b.timestamp)
           
+          // 去重处理：过滤掉已存在的消息
+          const newMessages = chatMessages.filter(msg => !isMessageExists(conversation!, msg.id))
+          
           // 如果是首次加载，直接设置消息
           if (!startMsgId) {
-            conversation.messages = chatMessages
+            conversation.messages = newMessages
           } else {
             // 如果是加载更多，将新消息插入到开头
-            conversation.messages = [...chatMessages, ...conversation.messages]
+            conversation.messages = [...newMessages, ...conversation.messages]
           }
 
           // 由于历史消息没有msgId，我们使用时间戳作为标识
@@ -534,30 +573,56 @@ export const useIMStore = defineStore('im', () => {
       } else {
         throw new Error(response.message || '加载历史消息失败')
       }
+      
+      return response // 返回响应数据用于调试
     } catch (error) {
       console.error('加载历史消息失败:', error)
       conversation.historyError = error instanceof Error ? error.message : '加载历史消息失败'
+      throw error // 重新抛出错误
     } finally {
       conversation.isLoadingHistory = false
     }
   }
 
   // 加载更多历史消息
-  const loadMoreHistory = async (sessionId: string): Promise<void> => {
+  const loadMoreHistory = async (sessionId: string): Promise<any> => {
     const currentUserId = getCurrentUserId()
     const conversationId = currentUserId
     const conversation = conversations.value.get(conversationId)
     
     if (!conversation || !conversation.hasMoreHistory || conversation.isLoadingHistory) {
-      return
+      return null
     }
 
-    await loadMessageHistory(sessionId, 10, conversation.oldestMsgId || undefined)
+    const response = await loadMessageHistory(sessionId, 10, conversation.oldestMsgId || undefined)
+    return response
   }
 
   // 初始化会话历史消息
   const initConversationHistory = async (sessionId: string): Promise<void> => {
-    await loadMessageHistory(sessionId, 10)
+    console.log('IM Store: 开始初始化会话历史消息，sessionId:', sessionId)
+    
+    // 确保当前会话已设置
+    if (!currentConversationId.value) {
+      console.warn('IM Store: 当前会话ID未设置，无法初始化历史消息')
+      return
+    }
+    
+    // 获取或创建会话
+    const conversation = getOrCreateConversation(currentConversationId.value)
+    console.log('IM Store: 获取会话成功，当前消息数量:', conversation.messages.length)
+    
+    // 如果已经有消息，跳过初始化
+    if (conversation.messages.length > 0) {
+      console.log('IM Store: 会话已有消息，跳过初始化')
+      return
+    }
+    
+    // 加载初始历史消息
+    console.log('IM Store: 开始加载初始历史消息')
+    await loadMessageHistory(sessionId, 20) // 增加初始加载数量
+    
+    console.log('IM Store: 历史消息初始化完成，最终消息数量:', conversation.messages.length)
   }
 
   // 获取或创建会话 - 更新版本

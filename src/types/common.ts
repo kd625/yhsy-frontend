@@ -54,11 +54,13 @@ export interface MessagePageQueryRequest {
   pageSize?: number    // 页面大小，默认10
 }
 
-// 历史消息数据结构
+// 历史消息数据结构 - 更新为匹配后端返回的实际结构
 export interface HistoryMessage {
-  content: string         // 消息内容（JSON字符串格式）
+  content: string         // 消息内容（直接的字符串，不是JSON）
   messageStatus: number   // 消息状态: 1-已发送, 2-已送达, 3-已读
+  senderId: string        // 发送者用户ID（字符串格式）
   sendTime: string        // 发送时间
+  msgId?: number          // 消息ID（可选，用于分页加载）
 }
 
 // 解析后的消息内容结构
