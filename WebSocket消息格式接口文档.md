@@ -6,7 +6,7 @@
 
 ## 连接信息
 
-- **WebSocket 端点**: `ws://localhost:8888/ws`
+- **WebSocket 端点**: `ws://localhost:8999/ws`
 - **协议**: WebSocket over HTTP
 - **消息格式**: JSON
 
@@ -259,7 +259,7 @@
 
 ## 连接流程
 
-1. **建立连接**: 客户端连接到 `ws://localhost:8888/ws`
+1. **建立连接**: 客户端连接到 `ws://localhost:8999/ws`
 2. **身份认证**: 发送 `AUTH_REQUEST` 消息进行认证
 3. **等待认证响应**: 接收 `AUTH_RESPONSE` 确认认证结果
 4. **正常通信**: 认证成功后可发送聊天消息和心跳
@@ -271,7 +271,7 @@
 
 ```javascript
 // 建立WebSocket连接
-const ws = new WebSocket('ws://localhost:8888/ws');
+const ws = new WebSocket('ws://localhost:8999/ws');
 
 // 连接成功后发送认证请求
 ws.onopen = function() {
