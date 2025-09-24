@@ -85,6 +85,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/chat',
+    name: 'ChatRoom',
+    component: () => import('@/views/Chat/ChatRoom.vue'),
+    meta: {
+      title: '聊天 - 砚湖书影',
+      requiresAuth: true
+    }
+  },
+  {
     path: '/chat/:sessionId',
     name: 'Chat',
     component: () => import('@/views/Chat.vue'),

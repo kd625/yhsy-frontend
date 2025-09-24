@@ -99,7 +99,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  action: 'http://114.132.232.212:8080/file/upload',
+  action: import.meta.env.VITE_API_BASE_URL + '/file/upload' || 'http://localhost:8080/file/upload',
   accept: '*',
   multiple: false,
   limit: 1,

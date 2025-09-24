@@ -6,11 +6,13 @@ import service from '@/utils/request'
 import { ElMessage } from 'element-plus'
 import { getSaToken, setSaToken, removeSaToken, clearAuth, getUserInfo, setUserInfo as setUserInfoToStorage } from '@/utils/auth'
 import router from '@/router'
+import { initIMConnection, disconnectIM } from '@/utils/im'
 
 export const useUserStore = defineStore('user', () => {
   // 状态
   const userInfo = ref<UserVO | null>(null)
   const token = ref<string | null>(getSaToken())
+  const isInitialized = ref<boolean>(false) // 添加初始化状态标记
   
   // 计算属性
   const isLogin = computed(() => !!token.value && !!userInfo.value)
@@ -45,9 +47,15 @@ export const useUserStore = defineStore('user', () => {
       console.error('退出登录API调用失败:', error)
       // 即使API调用失败，也要清除本地状态
     } finally {
+      // 断开IM连接
+      disconnectIM()
+      
       // 清除本地状态
       setUserInfo(null)
       setToken(null)
+      
+      // 重置初始化状态
+      isInitialized.value = false
       
       // 完全清除客户端存储的所有认证信息
       clearAuth()
@@ -98,6 +106,9 @@ export const useUserStore = defineStore('user', () => {
         if (tokenFromHeader) {
           setToken(tokenFromHeader)
           console.log('从响应头获取到satoken')
+          
+          // 登录成功后立即初始化IM连接
+          await initIMConnection(tokenFromHeader)
         } else {
           console.warn('响应头中未找到satoken')
         }
@@ -174,6 +185,11 @@ export const useUserStore = defineStore('user', () => {
   
   // 初始化时从localStorage恢复token和用户信息
   const initializeAuth = async () => {
+    // 如果已经初始化过，直接返回
+    if (isInitialized.value) {
+      return
+    }
+    
     const savedToken = getSaToken()
     const savedUserInfo = getUserInfo()
     
@@ -190,12 +206,16 @@ export const useUserStore = defineStore('user', () => {
         logout()
       }
     }
+    
+    // 标记为已初始化
+    isInitialized.value = true
   }
   
   return {
     // 状态
     userInfo,
     token,
+    isInitialized,
     // 计算属性
     isLogin,
     isAdmin,

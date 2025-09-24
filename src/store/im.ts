@@ -84,7 +84,7 @@ export const useIMStore = defineStore('im', () => {
 
     client.value = new IMClient({
       accessToken,
-      url: 'ws://114.132.232.212:8999/websocket'
+      url: import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8999/websocket'
     })
   }
 

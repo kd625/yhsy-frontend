@@ -156,7 +156,19 @@ export class IMClient {
   private shouldReconnect: boolean = true;
   
   constructor(options: IMClientOptions) {
-    this.url = options.url || 'ws://114.132.232.212:8888/websocket';
+    // 如果没有提供URL，则从环境变量获取，并根据当前页面协议自动选择ws或wss
+    if (!options.url) {
+      const baseWsUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8999/websocket';
+      // 如果当前页面是HTTPS，则将ws://替换为wss://
+      if (window.location.protocol === 'https:') {
+        this.url = baseWsUrl.replace(/^ws:\/\//, 'wss://');
+      } else {
+        this.url = baseWsUrl;
+      }
+    } else {
+      this.url = options.url;
+    }
+    
     this.accessToken = options.accessToken;
     this.heartbeatInterval = options.heartbeatInterval || 30000; // 30秒
     this.reconnectDelay = options.reconnectDelay || 1000; // 1秒

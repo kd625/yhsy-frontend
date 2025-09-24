@@ -191,7 +191,7 @@ const logoutLoading = ref(false)
 const contactLoading = ref(false)
 
 // 上传配置
-const uploadAction = 'http://114.132.232.212:8080/file/upload'
+const uploadAction = import.meta.env.VITE_API_BASE_URL + '/file/upload' || 'http://localhost:8080/file/upload'
 
 // 编辑表单数据
 const editForm = reactive({

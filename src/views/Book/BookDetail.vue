@@ -98,6 +98,20 @@
             >
               已下架
             </el-button>
+            
+            <!-- 聊一聊按钮 -->
+            <el-button
+              v-if="showChatButton"
+              type="success"
+              size="large"
+              :loading="chatLoading"
+              :disabled="chatDisabled"
+              @click="handleStartChat"
+              class="chat-button"
+            >
+              <el-icon><ChatDotRound /></el-icon>
+              {{ chatButtonText }}
+            </el-button>
           </div>
         </div>
       </div>
@@ -129,9 +143,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Picture } from '@element-plus/icons-vue'
+import { Picture, ChatDotRound } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
 import type { Book } from '@/types/book'
 import type { UserVO } from '@/types/user'
@@ -139,6 +153,7 @@ import request from '@/utils/request'
 import type { BaseResponse } from '@/types/common'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 // 响应式数据
@@ -147,6 +162,8 @@ const error = ref('')
 const book = ref<Book | null>(null)
 const seller = ref<UserVO | null>(null)
 const ordering = ref(false)
+const chatLoading = ref(false)
+const sessionExpired = ref(false)
 
 // 计算属性
 const canOrder = computed(() => {
@@ -157,6 +174,23 @@ const canOrder = computed(() => {
   
   // 只有在售状态才能预订
   return book.value.bookStatus === 0
+})
+
+// 聊一聊按钮相关计算属性
+const showChatButton = computed(() => {
+  // 用户已登录且不是自己的书
+  return userStore.userInfo && book.value && book.value.sellerId !== userStore.userInfo.id
+})
+
+const chatDisabled = computed(() => {
+  return sessionExpired.value
+})
+
+const chatButtonText = computed(() => {
+  if (sessionExpired.value) {
+    return '会话已过期'
+  }
+  return '聊一聊'
 })
 
 // 获取图书详情
@@ -268,6 +302,52 @@ const getStatusText = (status: number) => {
   }
 }
 
+// 处理开始聊天
+const handleStartChat = async () => {
+  if (!book.value || !userStore.userInfo) return
+
+  try {
+    chatLoading.value = true
+    
+    // 调用开始聊天接口
+    const response = await request.post<BaseResponse<any>>('/im/session/startChat', {
+      bookId: book.value.id,
+      sellerId: book.value.sellerId
+    })
+
+    if (response.data.code === 0) {
+      const sessionVO = response.data.data
+      
+      // 检查会话是否过期
+      const currentTime = new Date().getTime()
+      const expireTime = new Date(sessionVO.expireTime).getTime()
+      
+      if (currentTime > expireTime) {
+        // 会话已过期
+        sessionExpired.value = true
+        ElMessage.warning('会话已过期')
+        return
+      }
+      
+      // 会话有效，跳转到聊天界面
+      router.push({
+        path: '/chat',
+        query: {
+          sessionId: sessionVO.id,
+          bookId: book.value.id
+        }
+      })
+    } else {
+      throw new Error(response.data.message || '开始聊天失败')
+    }
+  } catch (err: any) {
+    console.error('开始聊天失败:', err)
+    ElMessage.error(err.message || '开始聊天失败')
+  } finally {
+    chatLoading.value = false
+  }
+}
+
 // 组件挂载时获取数据
 onMounted(() => {
   fetchBookDetail()
@@ -373,15 +453,20 @@ onMounted(() => {
 }
 
 .action-buttons {
-  margin-top: 30px;
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
 }
 
 .action-buttons .el-button {
-  min-width: 120px;
+  flex: 1;
+  max-width: 200px;
 }
 
 .chat-button {
-  margin-left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .book-description {

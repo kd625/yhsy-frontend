@@ -177,7 +177,7 @@ const uploadRef = ref()
 const submitLoading = ref(false)
 
 // 上传配置
-const uploadAction = ref('http://114.132.232.212:8080/file/upload')
+const uploadAction = ref(import.meta.env.VITE_API_BASE_URL + '/file/upload' || 'http://localhost:8080/file/upload')
 
 // 表单数据
 const bookForm = reactive<BookAddRequest>({

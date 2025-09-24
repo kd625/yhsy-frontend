@@ -38,6 +38,11 @@
             <!-- 后台管理（仅管理员可见） -->
             <el-menu-item v-if="userStore.isAdmin" index="/admin">后台管理</el-menu-item>
             
+            <!-- 消息图标 -->
+            <div class="message-icon-wrapper">
+              <MessageIcon />
+            </div>
+            
             <!-- 用户下拉菜单 -->
             <el-dropdown @command="handleUserCommand" class="user-dropdown">
               <span class="user-info">
@@ -82,6 +87,9 @@
         <p>砚湖书影 蜀ICP备2025163038号-1</p>
       </div>
     </el-footer>
+    
+    <!-- 聊天通知弹窗 -->
+    <ChatNotification />
   </el-container>
 </template>
 
@@ -91,6 +99,8 @@ import { useRouter, useRoute } from 'vue-router'
 import { Reading, User, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '@/store/modules/user'
+import MessageIcon from '@/components/Common/MessageIcon.vue'
+import ChatNotification from '@/components/Common/ChatNotification.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -148,7 +158,10 @@ const handleLogout = async () => {
 
 // 初始化
 onMounted(() => {
-  userStore.initializeAuth()
+  // 只有在未初始化时才调用initializeAuth
+  if (!userStore.isInitialized) {
+    userStore.initializeAuth()
+  }
 })
 </script>
 
@@ -253,6 +266,13 @@ onMounted(() => {
   height: 60px;
   display: flex;
   align-items: center;
+}
+
+.message-icon-wrapper {
+  display: flex;
+  align-items: center;
+  margin-left: 16px;
+  margin-right: 8px;
 }
 
 .user-info {

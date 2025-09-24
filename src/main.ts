@@ -23,7 +23,10 @@ async function initApp() {
   // 初始化用户认证状态
   const userStore = useUserStore()
   try {
-    await userStore.initializeAuth()
+    // 只在未初始化时调用
+    if (!userStore.isInitialized) {
+      await userStore.initializeAuth()
+    }
   } catch (error) {
     console.error('初始化用户认证状态失败:', error)
   }
