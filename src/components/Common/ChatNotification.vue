@@ -96,9 +96,6 @@ const handleChatRedirectMessage = async (incomingMessage: any) => {
   try {
     console.log('收到消息:', incomingMessage)
     
-    // 检查是否是发给当前用户的消息（不是自己发送的）
-    const currentUserId = userStore.userInfo?.id
-    
     // 这里的incomingMessage是IncomingChatMessage格式，包含msgId, sessionId, content
     if (incomingMessage && incomingMessage.sessionId) {
       // 从sessionId或其他方式获取发送者信息

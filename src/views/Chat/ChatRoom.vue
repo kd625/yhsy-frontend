@@ -315,13 +315,13 @@ const fetchMessageHistory = async (startMsgId?: number, isLoadMore = false) => {
             : Number(sessionInfo.value?.sellerId || 0)
         } else {
           // 如果发送者不是当前用户，接收者就是当前用户
-          receiverId = currentUserIdNum
+          receiverId = Number(currentUserIdNum)
         }
         
         const chatMessage: ChatMessage = {
           msgId: msgId,
           sessionId: sessionId,
-          senderId: senderId,
+          senderId: Number(senderId),
           receiverId: receiverId,
           content: content,
           createTime: msg.sendTime || new Date().toISOString()
@@ -446,7 +446,7 @@ const handleSendMessage = async () => {
       messages.value.push({
         msgId: messageContent.msgId,
         sessionId: sessionInfo.value.id,
-        senderId: currentUserId.value!,
+        senderId: Number(currentUserId.value!),
         receiverId: receiverId,
         content: messageContent.content,
         createTime: new Date().toISOString()

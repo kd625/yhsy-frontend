@@ -114,8 +114,6 @@ export const useUserStore = defineStore('user', () => {
           try {
             // 延迟调用，确保IM连接已建立
             setTimeout(async () => {
-              const { useIMStore } = await import('@/store/im')
-              const imStore = useIMStore()
               // 这里可以调用获取会话信息的方法
               // 但由于MessageIcon组件会在用户点击时调用，所以这里暂时不调用
             }, 1000)

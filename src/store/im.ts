@@ -4,7 +4,7 @@ import { IMClient } from '@/im/IMClient'
 import type { IncomingChatMessage } from '@/im/IMClient'
 import { useUserStore } from '@/store/modules/user'
 import { messageAPI } from '@/utils/request'
-import type { MessagePageQueryRequest, HistoryMessage, MessageContent } from '@/types/common'
+import type { MessagePageQueryRequest, HistoryMessage } from '@/types/common'
 
 // 定义消息发送状态
 export type MessageStatus = 'pending' | 'sent' | 'delivered' | 'failed'
