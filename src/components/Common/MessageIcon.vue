@@ -174,7 +174,7 @@ const handleIconClick = () => {
 }
 
 // 处理下拉框显示状态变化
-const handleDropdownVisibleChange = (visible: boolean) => {
+const handleDropdownVisibleChange = () => {
   // 移除自动调用接口的逻辑，避免频繁调用
   // 只有点击图标时才会调用 getCurrentSessions()
 }
@@ -237,12 +237,7 @@ const formatTime = (timeStr: string) => {
   return `${month}月${day}日`
 }
 
-// 监听IM消息，实时更新未读状态
-const handleNewMessage = () => {
-  // 移除自动刷新会话列表的逻辑，避免频繁调用接口
-  // 当收到新消息时，可以通过其他方式更新未读状态
-  // 例如：通过 WebSocket 推送或者用户主动点击消息图标时刷新
-}
+
 
 // 组件挂载时初始化
 onMounted(() => {
