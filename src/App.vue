@@ -1,9 +1,23 @@
 <script setup lang="ts">
 import AppLayout from '@/components/Layout/AppLayout.vue'
+import MessageNotification from '@/components/Common/MessageNotification.vue'
+import { useIMStore } from '@/store/im'
+
+const imStore = useIMStore()
+
+const handleNotificationClose = () => {
+  imStore.hideNotification()
+}
 </script>
 
 <template>
   <AppLayout />
+  
+  <!-- 消息通知弹窗 -->
+  <MessageNotification
+    :notification="imStore.currentNotification"
+    @close="handleNotificationClose"
+  />
 </template>
 
 <style>

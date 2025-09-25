@@ -391,14 +391,31 @@ onMounted(() => {
     font-size: 14px;
   }
   
-  .user-avatar-item {
-    min-width: 50px !important;
-    padding: 0 8px !important;
+  /* 确保用户头像和消息图标不被折叠 */
+  .user-dropdown {
+    flex-shrink: 0; /* 防止用户下拉菜单被压缩 */
+    margin-left: 8px;
+  }
+  
+  .message-icon-wrapper {
+    flex-shrink: 0; /* 防止消息图标被压缩 */
+    margin-left: 8px;
+    margin-right: 4px;
+  }
+  
+  .user-info {
+    padding: 0 8px;
   }
   
   .nav-avatar {
     width: 24px !important;
     height: 24px !important;
+    flex-shrink: 0; /* 防止头像被压缩 */
+  }
+  
+  .username {
+    margin: 0 4px;
+    font-size: 13px;
   }
   
   .app-main {
@@ -425,14 +442,31 @@ onMounted(() => {
     font-size: 12px;
   }
   
-  .user-avatar-item {
-    min-width: 40px !important;
-    padding: 0 6px !important;
+  /* 在小屏幕上隐藏用户名，只保留头像 */
+  .username {
+    display: none;
+  }
+  
+  /* 确保用户头像和消息图标在小屏幕上也不被折叠 */
+  .user-dropdown {
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
+  
+  .message-icon-wrapper {
+    flex-shrink: 0;
+    margin-left: 4px;
+    margin-right: 2px;
+  }
+  
+  .user-info {
+    padding: 0 4px;
   }
   
   .nav-avatar {
     width: 20px !important;
     height: 20px !important;
+    flex-shrink: 0;
   }
 }
 </style>

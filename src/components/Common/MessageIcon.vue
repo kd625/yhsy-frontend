@@ -1,33 +1,31 @@
 <template>
   <div class="message-icon-container">
     <!-- 消息图标 -->
-    <el-dropdown
-      @visible-change="handleDropdownVisibleChange"
+    <el-dropdown 
+      trigger="click" 
       placement="bottom-end"
-      trigger="click"
-      :hide-on-click="false"
+      @visible-change="handleDropdownVisibleChange"
     >
       <div class="message-icon" @click="handleIconClick">
         <el-icon :size="20">
           <ChatDotRound />
         </el-icon>
-        <!-- 未读消息红点 -->
-        <el-badge
-          v-if="hasUnreadMessages"
+        <!-- 未读消息数量徽章 -->
+        <el-badge 
+          v-if="unreadCount > 0" 
           :value="unreadCount > 99 ? '99+' : unreadCount"
-          :max="99"
           class="message-badge"
         />
       </div>
       
       <template #dropdown>
-        <div class="message-dropdown">
-          <!-- 会话列表头部 -->
-          <div class="dropdown-header">
-            <span class="header-title">消息</span>
-            <el-button
-              v-if="hasUnreadMessages"
-              type="text"
+        <el-dropdown-menu class="message-dropdown">
+          <!-- 头部 -->
+          <div class="message-header">
+            <span class="title">消息中心</span>
+            <el-button 
+              v-if="hasUnreadMessages" 
+              type="text" 
               size="small"
               @click="markAllAsRead"
             >
@@ -36,48 +34,57 @@
           </div>
           
           <!-- 会话列表 -->
-          <div class="conversation-list">
-            <div v-if="loading" class="loading-container">
-              <el-icon class="is-loading"><Loading /></el-icon>
-              <span>加载中...</span>
-            </div>
-            
-            <div v-else-if="conversations.length === 0" class="empty-container">
-              <el-icon><ChatDotRound /></el-icon>
-              <span>暂无消息</span>
-            </div>
-            
-            <div
-              v-else
-              v-for="conversation in conversations"
-              :key="conversation.sessionId"
-              class="conversation-item"
-              @click="handleConversationClick(conversation)"
-            >
-              <!-- 用户头像 -->
-              <el-avatar :size="40" :src="conversation.userAvatar" class="conversation-avatar">
-                <el-icon><User /></el-icon>
-              </el-avatar>
-              
-              <!-- 会话信息 -->
-              <div class="conversation-info">
-                <div class="conversation-header">
-                  <span class="user-name">{{ conversation.userName }}</span>
-                  <span class="last-time">{{ formatTime(conversation.lastMsgTime) }}</span>
-                </div>
-                <div class="conversation-content">
-                  <span class="last-message">{{ conversation.lastMsg || '暂无消息' }}</span>
-                  <el-badge
-                    v-if="conversation.unReadMsgCount > 0"
-                    :value="conversation.unReadMsgCount > 99 ? '99+' : conversation.unReadMsgCount"
-                    :max="99"
-                    class="unread-badge"
+          <div class="message-list" v-loading="loading">
+            <template v-if="conversations.length > 0">
+              <div 
+                v-for="conversation in conversations" 
+                :key="conversation.id"
+                class="message-item"
+                @click="handleConversationClick(conversation)"
+              >
+                <!-- 用户头像 -->
+                <div class="avatar-container">
+                  <el-avatar 
+                    :size="40"
+                    :src="conversation.targetUserAvatar || undefined"
+                    :icon="UserFilled"
                   />
                 </div>
+                
+                <!-- 消息内容 -->
+                <div class="message-content">
+                  <div class="user-info">
+                    <span class="username">{{ conversation.userName }}</span>
+                    <span class="time">{{ formatTime(conversation.expireTime) }}</span>
+                  </div>
+                  <div class="message-preview">
+                    点击查看会话详情
+                  </div>
+                </div>
+                
+                <!-- 未读标记 -->
+                <div v-if="conversation.hasUnreadMsg" class="unread-indicator">
+                  <div class="red-dot"></div>
+                </div>
               </div>
+            </template>
+            
+            <!-- 空状态 -->
+            <div v-else class="empty-state">
+              <el-icon :size="48" color="#c0c4cc">
+                <ChatDotRound />
+              </el-icon>
+              <p>暂无消息</p>
             </div>
           </div>
-        </div>
+          
+          <!-- 底部 -->
+          <div class="message-footer">
+            <el-button type="text" size="small" @click="goToMessageCenter">
+              查看全部消息
+            </el-button>
+          </div>
+        </el-dropdown-menu>
       </template>
     </el-dropdown>
   </div>
@@ -86,59 +93,69 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ChatDotRound, User, Loading } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { useIMStore } from '@/store/im'
+import { ElMessage, ElIcon, ElBadge, ElDropdown, ElDropdownMenu, ElButton, ElAvatar } from 'element-plus'
+import { ChatDotRound, UserFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
+import { useIMStore } from '@/store/im'
 import { request } from '@/utils/request'
 
-// 接口类型定义
+// 接口类型定义 - 更新为新的数据结构
 interface SessionVO {
-  sessionId: string
-  userId: string
+  id: string
+  hasUnreadMsg: boolean
+  expireTime: string
+  targetUserAvatar: string | null
   userName: string
-  userAvatar: string
-  lastMsg: string
-  lastMsgTime: string
-  unReadMsgCount: number
+}
+
+interface GetCurUserSessionRequest {
+  userId?: string  // 改为可选的string类型，与UserVO中的id类型保持一致
 }
 
 interface SessionCurrentResponse {
-  hasUnReadMsg: boolean
-  sessionVOList: SessionVO[]
+  code: number
+  data: SessionVO[]
+  message: string
 }
 
+// 路由和状态管理
 const router = useRouter()
-const imStore = useIMStore()
 const userStore = useUserStore()
+const imStore = useIMStore()
 
 // 响应式数据
 const loading = ref(false)
 const conversations = ref<SessionVO[]>([])
-const hasUnreadMessages = ref(false)
 
-// 计算属性
+// 计算属性 - 更新为基于hasUnreadMsg字段
 const unreadCount = computed(() => {
-  return conversations.value.reduce((total, conv) => total + conv.unReadMsgCount, 0)
+  return conversations.value.filter(conv => conv.hasUnreadMsg).length
 })
 
-// 获取当前会话状态
+const hasUnreadMessages = computed(() => {
+  return conversations.value.some(conv => conv.hasUnreadMsg)
+})
+
+// 获取当前会话列表
 const getCurrentSessions = async () => {
-  if (!userStore.isLogin) return
+  if (!userStore.isLogin) {
+    return
+  }
   
   try {
     loading.value = true
-    const response = await request.post<SessionCurrentResponse>('/im/session/getCurrent', {
-      userId: userStore.userInfo?.id
-    })
+    const requestData: GetCurUserSessionRequest = {
+      userId: userStore.userInfo?.id  // 直接使用string类型的id，不进行Number转换
+    }
+    const response = await request.post('/im/session/getCurrent', requestData) as SessionCurrentResponse
     
-    if (response.data) {
-      hasUnreadMessages.value = response.data.hasUnReadMsg
-      conversations.value = response.data.sessionVOList || []
+    if (response.code === 0) {
+      conversations.value = response.data || []
+    } else {
+      console.error('获取会话列表失败:', response.message)
     }
   } catch (error) {
     console.error('获取会话列表失败:', error)
-    ElMessage.error('获取消息列表失败')
   } finally {
     loading.value = false
   }
@@ -158,15 +175,14 @@ const handleIconClick = () => {
 
 // 处理下拉框显示状态变化
 const handleDropdownVisibleChange = (visible: boolean) => {
-  if (visible && userStore.isLogin) {
-    getCurrentSessions()
-  }
+  // 移除自动调用接口的逻辑，避免频繁调用
+  // 只有点击图标时才会调用 getCurrentSessions()
 }
 
 // 处理会话点击
 const handleConversationClick = (conversation: SessionVO) => {
   // 跳转到单聊界面
-  router.push(`/chat/${conversation.sessionId}`)
+  router.push(`/chat/${conversation.id}`)
 }
 
 // 标记所有消息为已读
@@ -177,15 +193,19 @@ const markAllAsRead = async () => {
     
     // 临时处理：清除本地未读状态
     conversations.value.forEach(conv => {
-      conv.unReadMsgCount = 0
+      conv.hasUnreadMsg = false
     })
-    hasUnreadMessages.value = false
     
     ElMessage.success('已标记全部消息为已读')
   } catch (error) {
     console.error('标记已读失败:', error)
     ElMessage.error('操作失败')
   }
+}
+
+// 跳转到消息中心
+const goToMessageCenter = () => {
+  router.push('/messages')
 }
 
 // 格式化时间
@@ -219,17 +239,15 @@ const formatTime = (timeStr: string) => {
 
 // 监听IM消息，实时更新未读状态
 const handleNewMessage = () => {
-  // 当收到新消息时，刷新会话列表
-  if (userStore.isLogin) {
-    getCurrentSessions()
-  }
+  // 移除自动刷新会话列表的逻辑，避免频繁调用接口
+  // 当收到新消息时，可以通过其他方式更新未读状态
+  // 例如：通过 WebSocket 推送或者用户主动点击消息图标时刷新
 }
 
 // 组件挂载时初始化
 onMounted(() => {
-  if (userStore.isLogin) {
-    getCurrentSessions()
-  }
+  // 移除自动调用接口的逻辑，避免频繁调用
+  // 只有在用户主动点击消息图标时才会调用 getCurrentSessions()
   
   // 监听IM消息事件
   if (imStore.client) {
@@ -271,39 +289,101 @@ onUnmounted(() => {
 
 .message-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -5px;
+  right: -5px;
 }
 
 .message-dropdown {
   width: 320px;
   max-height: 400px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 0;
 }
 
-.dropdown-header {
+.message-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #ebeef5;
+  background-color: #fafafa;
 }
 
-.header-title {
-  font-size: 16px;
+.message-header .title {
   font-weight: 600;
   color: #303133;
 }
 
-.conversation-list {
+.message-list {
   max-height: 300px;
   overflow-y: auto;
 }
 
-.loading-container,
-.empty-container {
+.message-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.message-item:hover {
+  background-color: #f5f7fa;
+}
+
+.message-item:last-child {
+  border-bottom: none;
+}
+
+.avatar-container {
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.username {
+  font-weight: 500;
+  color: #303133;
+  font-size: 14px;
+}
+
+.time {
+  font-size: 12px;
+  color: #909399;
+}
+
+.message-preview {
+  font-size: 12px;
+  color: #606266;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unread-indicator {
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.red-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #f56c6c;
+  border-radius: 50%;
+}
+
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -312,98 +392,15 @@ onUnmounted(() => {
   color: #909399;
 }
 
-.loading-container .el-icon {
-  font-size: 24px;
-  margin-bottom: 8px;
-}
-
-.empty-container .el-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-  color: #c0c4cc;
-}
-
-.conversation-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.conversation-item:hover {
-  background-color: #f5f7fa;
-}
-
-.conversation-avatar {
-  margin-right: 12px;
-  flex-shrink: 0;
-}
-
-.conversation-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.conversation-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.user-name {
+.empty-state p {
+  margin: 12px 0 0 0;
   font-size: 14px;
-  font-weight: 500;
-  color: #303133;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.last-time {
-  font-size: 12px;
-  color: #909399;
-  flex-shrink: 0;
-  margin-left: 8px;
-}
-
-.conversation-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.last-message {
-  font-size: 13px;
-  color: #606266;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.unread-badge {
-  flex-shrink: 0;
-  margin-left: 8px;
-}
-
-/* 滚动条样式 */
-.conversation-list::-webkit-scrollbar {
-  width: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 2px;
-}
-
-.conversation-list::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 2px;
-}
-
-.conversation-list::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+.message-footer {
+  padding: 8px 16px;
+  border-top: 1px solid #ebeef5;
+  background-color: #fafafa;
+  text-align: center;
 }
 </style>
