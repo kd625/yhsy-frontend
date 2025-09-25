@@ -31,6 +31,20 @@
         <span>加载更多消息...</span>
       </div>
       
+      <!-- 历史消息加载错误 -->
+      <div v-if="historyError" class="history-error">
+        <el-icon color="#f56c6c">
+          <Warning />
+        </el-icon>
+        <span>{{ historyError }}</span>
+        <el-button size="small" type="text" @click="retryLoadHistory">重试</el-button>
+      </div>
+      
+      <!-- 没有更多历史消息提示 -->
+      <div v-else-if="!hasMoreHistory && messages.length > 0" class="no-more-history">
+        <span>没有更多历史消息了</span>
+      </div>
+      
       <div v-else-if="messages.length === 0 && !loading" class="empty-messages">
         <el-empty description="暂无消息，开始聊天吧！" />
       </div>
@@ -141,6 +155,7 @@ const otherUser = ref<UserVO | null>(null)
 const messageListRef = ref<HTMLElement>()
 const isLoadingMore = ref(false)
 const hasMoreHistory = ref(true)
+const historyError = ref('')
 
 // 计算属性
 const currentUserId = computed(() => userStore.userInfo?.id)
@@ -269,9 +284,7 @@ const fetchMessageHistory = async (startMsgId?: number, isLoadMore = false) => {
       params.startMsgId = startMsgId
     }
 
-    const response = await request.get<BaseResponse<any[]>>('/im/message/history', {
-      params
-    })
+    const response = await request.post<BaseResponse<any[]>>('/im/message/history', params)
 
     console.log('历史消息接口响应:', response)
 
@@ -350,6 +363,7 @@ const fetchMessageHistory = async (startMsgId?: number, isLoadMore = false) => {
     }
   } catch (err: any) {
     console.error('获取消息历史失败:', err)
+    historyError.value = err.message || '获取消息历史失败'
     ElMessage.error(err.message || '获取消息历史失败')
   } finally {
     if (isLoadMore) {
@@ -358,6 +372,12 @@ const fetchMessageHistory = async (startMsgId?: number, isLoadMore = false) => {
       loading.value = false
     }
   }
+}
+
+// 重试加载历史消息
+const retryLoadHistory = async () => {
+  historyError.value = ''
+  await fetchMessageHistory()
 }
 
 // 加载更多历史消息
@@ -413,8 +433,8 @@ const handleSendMessage = async () => {
     // 通过WebSocket发送消息
     if (imStore.isReady) {
       const receiverId: number = String(sessionInfo.value.sellerId) === currentUserIdStr.value 
-        ? sessionInfo.value.buyerId 
-        : sessionInfo.value.sellerId
+        ? Number(sessionInfo.value.buyerId)
+        : Number(sessionInfo.value.sellerId)
       
       await imStore.sendMessage(
         receiverId.toString(),
@@ -597,6 +617,31 @@ onUnmounted(() => {
 .chat-with {
   font-size: 14px;
   color: #909399;
+}
+
+.history-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: #f56c6c;
+  font-size: 14px;
+  background-color: #fef0f0;
+  border: 1px solid #fbc4c4;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.no-more-history {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: #c0c4cc;
+  font-size: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 16px;
 }
 
 .loading-more {

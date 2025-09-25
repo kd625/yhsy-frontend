@@ -222,14 +222,19 @@ const loadMoreHistory = async (): Promise<void> => {
     isLoadingHistory.value = true
     historyError.value = null
     
-    // 获取当前最早的消息ID作为查询参数
+    // 获取当前最早的消息的msgId作为查询参数
     const conversation = imStore.currentConversation
-    const lastMessageId = conversation?.messages?.[0]?.id || null
+    const earliestMessage = conversation?.messages?.[0]
+    let startMsgId: number | undefined = undefined
+    
+    if (earliestMessage?.msgId) {
+      startMsgId = Number(earliestMessage.msgId)
+    }
     
     // 调试日志：输出请求参数
     console.log('正在请求历史消息，参数:', {
       sessionId: currentSessionId.value,
-      before: lastMessageId,
+      startMsgId: startMsgId,
       limit: 20
     })
     
@@ -348,9 +353,9 @@ const handleSessionInfo = async (sessionVO: SessionVO): Promise<void> => {
     // 获取目标用户信息
     if (targetUserId.value) {
       await fetchUserInfo(targetUserId.value)
-      // 设置IM store的当前会话，使用targetUserId（对方用户ID）
-      imStore.setCurrentConversation(targetUserId.value)
-      console.log('已设置当前会话为:', targetUserId.value)
+      // 设置IM store的当前会话，使用sessionId（与IM Store中的会话ID保持一致）
+      imStore.setCurrentConversation(currentSessionId.value)
+      console.log('已设置当前会话为sessionId:', currentSessionId.value, '对方用户ID:', targetUserId.value)
       
       // 初始化历史消息
       await initializeHistory()
@@ -488,6 +493,9 @@ watch(() => route.params.sessionId, (newSessionId) => {
 // 页面初始化
 onMounted(async () => {
   try {
+    // 设置当前页面为聊天页面
+    imStore.setCurrentPageChat(true)
+    
     // 确保用户已登录
     if (!userStore.isLogin) {
       ElMessage.error('请先登录')
@@ -495,16 +503,56 @@ onMounted(async () => {
       return
     }
 
-    // 初始化IM连接
+    // 初始化IM连接 - 确保完全初始化完成
     if (!imStore.client) {
       imStore.initialize(userStore.token || '')
     }
     imStore.initClient()
 
-    // 连接IM服务器
+    // 连接IM服务器并等待认证完成
     if (!imStore.isReady) {
       await imStore.connectIM()
+      
+      // 等待认证完成 - 监听认证事件
+      if (imStore.client && !imStore.client.isAuthenticated()) {
+        console.log('等待IM客户端认证完成...')
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('IM客户端认证超时'))
+          }, 10000) // 10秒超时
+          
+          const onAuthenticated = () => {
+            clearTimeout(timeout)
+            imStore.client?.off('authenticated', onAuthenticated)
+            imStore.client?.off('authFailed', onAuthFailed)
+            console.log('IM客户端认证成功')
+            resolve()
+          }
+          
+          const onAuthFailed = (data: { error: string }) => {
+            clearTimeout(timeout)
+            imStore.client?.off('authenticated', onAuthenticated)
+            imStore.client?.off('authFailed', onAuthFailed)
+            reject(new Error(`IM客户端认证失败: ${data.error}`))
+          }
+          
+          imStore.client?.on('authenticated', onAuthenticated)
+          imStore.client?.on('authFailed', onAuthFailed)
+          
+          // 如果已经认证成功，直接resolve
+          if (imStore.client?.isAuthenticated()) {
+            clearTimeout(timeout)
+            resolve()
+          }
+        })
+      }
     }
+
+    console.log('IM客户端初始化完成，状态:', {
+      isConnected: imStore.client?.isConnected(),
+      isAuthenticated: imStore.client?.isAuthenticated(),
+      isReady: imStore.isReady
+    })
 
     // 监听新消息
     if (imStore.client) {
@@ -543,6 +591,9 @@ onMounted(async () => {
 
 // 页面销毁
 onUnmounted(() => {
+  // 清除当前页面状态
+  imStore.setCurrentPageChat(false)
+  
   if (imStore.client) {
     imStore.client.off('messageReceived', handleNewMessage)
   }

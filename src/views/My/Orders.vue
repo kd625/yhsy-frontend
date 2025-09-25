@@ -80,7 +80,7 @@
                 v-if="book.bookStatus === 1"
                 size="small" 
                 type="success"
-                @click.stop="startChat(book.sellerId)"
+                @click.stop="startChat(book)"
               >
                 聊一聊
               </el-button>
@@ -342,7 +342,7 @@ const handleCurrentChange = (val: number) => {
 }
 
 // 开始聊天
-const startChat = async (sellerId: string) => {
+const startChat = async (book: Book) => {
   try {
     // 确保用户已登录
     if (!userStore.isLogin || !userStore.token) {
@@ -361,18 +361,11 @@ const startChat = async (sellerId: string) => {
       await imStore.connectIM()
     }
     
-    // 找到对应的书籍信息
-    const book = bookList.value.find((b: Book) => b.sellerId === sellerId)
-    if (!book) {
-      ElMessage.error('找不到对应的书籍信息')
-      return
-    }
-    
     // 调用后端接口开始会话
     const response = await request.post('/im/session/startChat', {
       bookId: book.id,
       buyerId: userStore.userInfo?.id,
-      sellerId: sellerId
+      sellerId: book.sellerId
     })
     
     if (response.code === 0) {
