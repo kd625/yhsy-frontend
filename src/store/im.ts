@@ -4,7 +4,7 @@ import { IMClient } from '@/im/IMClient'
 import type { IncomingChatMessage } from '@/im/IMClient'
 import { useUserStore } from '@/store/modules/user'
 import { messageAPI } from '@/utils/request'
-import type { MessagePageQueryRequest, HistoryMessage } from '@/types/common'
+import type { MessagePageQueryRequest, HistoryMessage, MessageContent } from '@/types/common'
 
 // 定义消息发送状态
 export type MessageStatus = 'pending' | 'sent' | 'delivered' | 'failed'
@@ -182,45 +182,13 @@ export const useIMStore = defineStore('im', () => {
       }
     }
 
-    // 如果客户端未就绪，尝试连接并等待认证完成
+    // 如果客户端未就绪，尝试连接
     if (!isReady.value) {
       console.log('IM客户端未就绪，尝试连接...')
       try {
         await connectIM()
-        
-        // 等待认证完成
-        if (client.value && !client.value.isAuthenticated()) {
-          console.log('等待IM客户端认证完成...')
-          await new Promise<void>((resolve, reject) => {
-            const timeout = setTimeout(() => {
-              reject(new Error('IM客户端认证超时'))
-            }, 10000) // 10秒超时
-            
-            const onAuthenticated = () => {
-              clearTimeout(timeout)
-              client.value?.off('authenticated', onAuthenticated)
-              client.value?.off('authFailed', onAuthFailed)
-              console.log('IM客户端认证成功')
-              resolve()
-            }
-            
-            const onAuthFailed = (data: { error: string }) => {
-              clearTimeout(timeout)
-              client.value?.off('authenticated', onAuthenticated)
-              client.value?.off('authFailed', onAuthFailed)
-              reject(new Error(`IM客户端认证失败: ${data.error}`))
-            }
-            
-            client.value?.on('authenticated', onAuthenticated)
-            client.value?.on('authFailed', onAuthFailed)
-            
-            // 如果已经认证成功，直接resolve
-            if (client.value?.isAuthenticated()) {
-              clearTimeout(timeout)
-              resolve()
-            }
-          })
-        }
+        // 等待一小段时间确保连接和认证完成
+        await new Promise(resolve => setTimeout(resolve, 1000))
       } catch (error) {
         console.error('连接IM服务失败:', error)
         throw new Error('IM客户端连接失败，请刷新页面重试')
@@ -231,12 +199,6 @@ export const useIMStore = defineStore('im', () => {
     if (!client.value || !isReady.value) {
       throw new Error('IM客户端未就绪，请稍后重试')
     }
-
-    console.log('IM客户端状态检查通过，准备发送消息:', {
-      isConnected: client.value.isConnected(),
-      isAuthenticated: client.value.isAuthenticated(),
-      isReady: isReady.value
-    })
 
     // 生成临时消息ID
     const tempMsgId = Date.now()

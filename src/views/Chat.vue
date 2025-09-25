@@ -503,56 +503,16 @@ onMounted(async () => {
       return
     }
 
-    // 初始化IM连接 - 确保完全初始化完成
+    // 初始化IM连接
     if (!imStore.client) {
       imStore.initialize(userStore.token || '')
     }
     imStore.initClient()
 
-    // 连接IM服务器并等待认证完成
+    // 连接IM服务器
     if (!imStore.isReady) {
       await imStore.connectIM()
-      
-      // 等待认证完成 - 监听认证事件
-      if (imStore.client && !imStore.client.isAuthenticated()) {
-        console.log('等待IM客户端认证完成...')
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error('IM客户端认证超时'))
-          }, 10000) // 10秒超时
-          
-          const onAuthenticated = () => {
-            clearTimeout(timeout)
-            imStore.client?.off('authenticated', onAuthenticated)
-            imStore.client?.off('authFailed', onAuthFailed)
-            console.log('IM客户端认证成功')
-            resolve()
-          }
-          
-          const onAuthFailed = (data: { error: string }) => {
-            clearTimeout(timeout)
-            imStore.client?.off('authenticated', onAuthenticated)
-            imStore.client?.off('authFailed', onAuthFailed)
-            reject(new Error(`IM客户端认证失败: ${data.error}`))
-          }
-          
-          imStore.client?.on('authenticated', onAuthenticated)
-          imStore.client?.on('authFailed', onAuthFailed)
-          
-          // 如果已经认证成功，直接resolve
-          if (imStore.client?.isAuthenticated()) {
-            clearTimeout(timeout)
-            resolve()
-          }
-        })
-      }
     }
-
-    console.log('IM客户端初始化完成，状态:', {
-      isConnected: imStore.client?.isConnected(),
-      isAuthenticated: imStore.client?.isAuthenticated(),
-      isReady: imStore.isReady
-    })
 
     // 监听新消息
     if (imStore.client) {

@@ -109,17 +109,6 @@ export const useUserStore = defineStore('user', () => {
           
           // 登录成功后立即初始化IM连接
           await initIMConnection(tokenFromHeader)
-          
-          // 登录成功后调用获取会话信息（只在登录时调用一次）
-          try {
-            // 延迟调用，确保IM连接已建立
-            setTimeout(async () => {
-              // 这里可以调用获取会话信息的方法
-              // 但由于MessageIcon组件会在用户点击时调用，所以这里暂时不调用
-            }, 1000)
-          } catch (error) {
-            console.error('获取会话信息失败:', error)
-          }
         } else {
           console.warn('响应头中未找到satoken')
         }
