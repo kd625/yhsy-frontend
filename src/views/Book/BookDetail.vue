@@ -6,6 +6,7 @@
     </div>
 
     <!-- 错误状态 -->
+     <!-- xiugai1 -->
     <div v-else-if="error" class="error-container">
       <el-result
         icon="error"

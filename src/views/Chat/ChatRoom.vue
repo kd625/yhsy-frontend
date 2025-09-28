@@ -1,6 +1,6 @@
 <template>
   <div class="chat-room">
-    <!-- 聊天头部 -->
+    <!-- 聊天头部----ing -->
     <div class="chat-header">
       <el-button 
         type="text" 
