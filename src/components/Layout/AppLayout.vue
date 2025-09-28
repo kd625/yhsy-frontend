@@ -29,9 +29,9 @@
             <el-menu-item index="/publish">发布图书</el-menu-item>
             
             <!-- 我的图书下拉菜单 -->
-            <el-sub-menu index="my-books" class="my-books-submenu">
+            <el-sub-menu index="my-books"  class="my-books-submenu" popper-class="my-books-popper">
               <template #title>我的图书</template>
-              <el-menu-item index="/my/published">我发布的</el-menu-item>
+              <el-menu-item index="/my/published" >我发布的</el-menu-item>
               <el-menu-item index="/my/orders">我预订的</el-menu-item>
             </el-sub-menu>
             
@@ -321,6 +321,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   vertical-align: middle;
+  font-size: 16px; 
 }
 
 .my-books-submenu .el-sub-menu__title:hover {
@@ -391,6 +392,11 @@ onMounted(() => {
     font-size: 14px;
   }
   
+  /* 我的图书下拉菜单在中等屏幕的字体大小 */
+  .my-books-submenu .el-sub-menu__title {
+    font-size: 14px;
+  }
+  
   /* 确保用户头像和消息图标不被折叠 */
   .user-dropdown {
     flex-shrink: 0; /* 防止用户下拉菜单被压缩 */
@@ -433,7 +439,7 @@ onMounted(() => {
   }
   
   .project-name {
-    font-size: 14px;
+    font-size: 12px;
   }
   
   .nav-menu .el-menu-item {
@@ -442,6 +448,18 @@ onMounted(() => {
     font-size: 12px;
   }
   
+  /* 我的图书下拉菜单在小屏幕的字体大小 */
+  .my-books-submenu :deep(.el-sub-menu__title ) {
+    font-size: 12px;
+    margin-top: 2px;
+    line-height: 40px;
+  }
+  .my-books-popper { width: 30px !important; }
+  .my-books-popper .el-menu-item {
+  font-size: 12px ; 
+}
+
+
   /* 在小屏幕上隐藏用户名，只保留头像 */
   .username {
     display: none;

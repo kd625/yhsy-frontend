@@ -47,4 +47,5 @@ body {
   --el-color-primary-light-9: #ecf5ff;
   --el-color-primary-dark-2: #337ecc;
 }
+
 </style>
