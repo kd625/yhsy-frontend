@@ -185,7 +185,12 @@ const handleScroll = async (): Promise<void> => {
   if (scrollTop <= threshold && !isScrollingToBottom.value) {
     console.log('🚀 触发加载更多历史消息！')
     console.log('触发条件 - scrollTop:', scrollTop, '≤ threshold:', threshold)
-    await loadMoreHistory()
+    try {
+      await loadMoreHistory()
+    } catch (error) {
+      console.error('滚动加载历史消息失败:', error)
+      // 错误已在loadMoreHistory中处理，这里不需要额外处理
+    }
   } else {
     console.log('未触发加载，原因:')
     if (scrollTop > threshold) {
@@ -213,9 +218,9 @@ const loadMoreHistory = async (): Promise<void> => {
     isLoadingHistory.value = true
     historyError.value = null
     
-    // 获取当前最早的消息的msgId作为查询参数
+    // 获取当前最早的消息的msgId作为查询参数（修正为使用最早消息）
     const conversation = imStore.currentConversation
-    const earliestMessage = conversation?.messages?.[0]
+    const earliestMessage = conversation?.messages?.[0] // 获取第一条消息（最早的）
     let startMsgId: number | undefined = undefined
     
     if (earliestMessage?.msgId) {
@@ -226,7 +231,8 @@ const loadMoreHistory = async (): Promise<void> => {
     console.log('正在请求历史消息，参数:', {
       sessionId: currentSessionId.value,
       startMsgId: startMsgId,
-      limit: 20
+      limit: 20,
+      note: '使用最早消息的msgId作为参数'
     })
     
     // 记录当前滚动位置
@@ -256,6 +262,7 @@ const loadMoreHistory = async (): Promise<void> => {
     // 如果没有新增消息，输出警告
     if (messagesAfter === messagesBefore) {
       console.warn('未返回历史消息，可能已到达最早记录')
+      hasMoreHistory.value = false
     }
     
     // 保持滚动位置
@@ -269,7 +276,29 @@ const loadMoreHistory = async (): Promise<void> => {
     })
   } catch (error) {
     console.error('加载更多历史消息失败:', error)
-    historyError.value = error instanceof Error ? error.message : '加载历史消息失败'
+    
+    // 根据错误类型提供不同的错误信息
+    let errorMessage = '加载历史消息失败'
+    if (error instanceof Error) {
+      if (error.message.includes('网络')) {
+        errorMessage = '网络连接异常，请检查网络后重试'
+      } else if (error.message.includes('权限')) {
+        errorMessage = '没有权限访问历史消息'
+      } else if (error.message.includes('会话')) {
+        errorMessage = '会话已过期，请刷新页面重试'
+      } else {
+        errorMessage = error.message
+      }
+    }
+    
+    historyError.value = errorMessage
+    
+    // 显示用户友好的错误提示
+    ElMessage.error({
+      message: errorMessage,
+      duration: 3000,
+      showClose: true
+    })
   } finally {
     isLoadingHistory.value = false
   }
@@ -277,8 +306,16 @@ const loadMoreHistory = async (): Promise<void> => {
 
 // 重试加载历史消息
 const retryLoadHistory = async (): Promise<void> => {
+  console.log('用户点击重试加载历史消息')
   historyError.value = null
-  await loadMoreHistory()
+  
+  try {
+    await loadMoreHistory()
+    ElMessage.success('重试成功')
+  } catch (error) {
+    console.error('重试加载历史消息失败:', error)
+    // 错误已在loadMoreHistory中处理
+  }
 }
 
 // 初始化历史消息
@@ -293,6 +330,10 @@ const initializeHistory = async (): Promise<void> => {
   try {
     messagesLoading.value = true
     
+    // 重置hasMoreHistory状态为true，确保可以加载历史消息
+    hasMoreHistory.value = true
+    historyError.value = null
+    
     // 调用store中的初始化历史消息方法
     console.log('调用 imStore.initConversationHistory')
     await imStore.initConversationHistory(currentSessionId.value)
@@ -305,6 +346,8 @@ const initializeHistory = async (): Promise<void> => {
       console.log('历史消息初始化完成，消息数量:', conversation.messages.length, '是否有更多:', hasMoreHistory.value)
     } else {
       console.warn('初始化后未找到当前会话')
+      // 如果没有找到会话，保持hasMoreHistory为true，允许尝试加载
+      hasMoreHistory.value = true
     }
     
     // 滚动到底部
@@ -313,6 +356,8 @@ const initializeHistory = async (): Promise<void> => {
     })
   } catch (error) {
     console.error('初始化历史消息失败:', error)
+    // 即使初始化失败，也保持hasMoreHistory为true，允许用户手动重试
+    hasMoreHistory.value = true
     ElMessage.error('加载历史消息失败')
   } finally {
     messagesLoading.value = false

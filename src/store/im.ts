@@ -546,15 +546,11 @@ export const useIMStore = defineStore('im', () => {
 
   // 加载历史消息
   const loadMessageHistory = async (sessionId: string, pageSize: number = 10, startMsgId?: number): Promise<any> => {
-    const currentUserId = getCurrentUserId()
-    // 使用sessionId作为会话ID，而不是currentUserId
     const conversationId = sessionId
-    
-    console.log('IM Store: loadMessageHistory - sessionId:', sessionId, 'currentUserId:', currentUserId)
-    
-    // 获取或创建会话
     let conversation = conversations.value.get(conversationId)
+    
     if (!conversation) {
+      // 如果会话不存在，创建一个新的会话
       conversation = {
         userId: conversationId,
         messages: [],
@@ -566,14 +562,20 @@ export const useIMStore = defineStore('im', () => {
         oldestMsgId: null
       }
       conversations.value.set(conversationId, conversation)
-      console.log('IM Store: 创建新会话，conversationId:', conversationId)
     }
 
-    // 设置加载状态
-    conversation.isLoadingHistory = true
-    conversation.historyError = null
+    if (conversation.isLoadingHistory) {
+      console.log('IM Store: 正在加载历史消息，跳过重复请求')
+      return null
+    }
 
     try {
+      conversation.isLoadingHistory = true
+      conversation.historyError = null
+      
+      const userStore = useUserStore()
+      const currentUserId = userStore.userInfo?.id || ''
+      
       const request: MessagePageQueryRequest = {
         sessionId: sessionId,
         current: 1,
@@ -610,23 +612,31 @@ export const useIMStore = defineStore('im', () => {
           if (!startMsgId) {
             conversation.messages = newMessages
           } else {
-            // 如果是加载更多，将新消息插入到开头
+            // 如果是加载更多，将新消息插入到开头（因为我们现在传递的是最早消息的msgId）
             conversation.messages = [...newMessages, ...conversation.messages]
           }
 
-          // 更新oldestMsgId为最早消息的msgId
-          if (chatMessages.length > 0) {
+          // 更新oldestMsgId为最早消息的msgId（用于下次分页）
+          if (newMessages.length > 0) {
             // 获取最早消息的msgId
-            const oldestMessage = chatMessages.reduce((oldest, current) => 
-              current.timestamp < oldest.timestamp ? current : oldest
+            const earliestMessage = newMessages.reduce((earliest, current) => 
+              current.timestamp < earliest.timestamp ? current : earliest
             )
-            conversation.oldestMsgId = oldestMessage.msgId || null
+            conversation.oldestMsgId = earliestMessage.msgId || null
           }
           
           // 检查是否还有更多历史消息
-          conversation.hasMoreHistory = historyMessages.length === pageSize
+          // 修复：更准确地判断是否还有更多历史消息
+          if (historyMessages.length < pageSize) {
+            conversation.hasMoreHistory = false
+            console.log('IM Store: 返回消息数量少于请求数量，设置hasMoreHistory为false')
+          } else {
+            // 如果返回了完整的页面大小，可能还有更多消息
+            conversation.hasMoreHistory = true
+            console.log('IM Store: 返回完整页面大小，保持hasMoreHistory为true')
+          }
           
-          console.log('IM Store: 会话最终消息数量:', conversation.messages.length)
+          console.log('IM Store: 会话最终消息数量:', conversation.messages.length, 'hasMoreHistory:', conversation.hasMoreHistory)
         } else {
           conversation.hasMoreHistory = false
           console.log('IM Store: 没有历史消息')
@@ -638,8 +648,50 @@ export const useIMStore = defineStore('im', () => {
       return response // 返回响应数据用于调试
     } catch (error) {
       console.error('IM Store: 加载历史消息失败:', error)
-      conversation.historyError = error instanceof Error ? error.message : '加载历史消息失败'
-      throw error // 重新抛出错误
+      
+      // 增强错误处理 - 根据错误类型提供更友好的错误信息
+      let errorMessage = '加载历史消息失败'
+      
+      if (error instanceof Error) {
+        // 网络错误检测
+        if (error.name === 'NetworkError' || 
+            error.message.includes('fetch') || 
+            error.message.includes('Network') ||
+            error.message.includes('ERR_NETWORK') ||
+            error.message.includes('Failed to fetch')) {
+          errorMessage = '网络连接异常，请检查网络后重试'
+        }
+        // 权限错误检测
+        else if (error.message.includes('401') || 
+                 error.message.includes('Unauthorized') ||
+                 error.message.includes('权限')) {
+          errorMessage = '没有权限访问历史消息'
+        }
+        // 会话错误检测
+        else if (error.message.includes('会话') || 
+                 error.message.includes('session') ||
+                 error.message.includes('Session')) {
+          errorMessage = '会话已过期，请刷新页面重试'
+        }
+        // 服务器错误检测
+        else if (error.message.includes('500') || 
+                 error.message.includes('Internal Server Error') ||
+                 error.message.includes('服务器')) {
+          errorMessage = '服务器暂时不可用，请稍后重试'
+        }
+        // 超时错误检测
+        else if (error.message.includes('timeout') || 
+                 error.message.includes('Timeout')) {
+          errorMessage = '请求超时，请重试'
+        }
+        // 使用原始错误信息
+        else {
+          errorMessage = error.message
+        }
+      }
+      
+      conversation.historyError = errorMessage
+      throw new Error(errorMessage) // 抛出增强后的错误信息
     } finally {
       conversation.isLoadingHistory = false
     }
@@ -654,7 +706,13 @@ export const useIMStore = defineStore('im', () => {
       return null
     }
 
-    const response = await loadMessageHistory(sessionId, 10, conversation.oldestMsgId || undefined)
+    // 使用最早消息的msgId作为参数（修正为使用最早消息）
+    const earliestMessage = conversation.messages[0] // 获取第一条消息（最早的）
+    const earliestMsgId = earliestMessage?.msgId ? Number(earliestMessage.msgId) : undefined
+    
+    console.log('IM Store: 加载更多历史消息，使用最早消息msgId:', earliestMsgId)
+    
+    const response = await loadMessageHistory(sessionId, 10, earliestMsgId)
     return response
   }
 
@@ -689,19 +747,32 @@ export const useIMStore = defineStore('im', () => {
     
     console.log('IM Store: 获取会话成功，当前消息数量:', conversation.messages.length)
     
-    // 如果已经有消息，跳过初始化
+    // 确保hasMoreHistory状态正确初始化
+    if (conversation.hasMoreHistory === undefined || conversation.hasMoreHistory === null) {
+      conversation.hasMoreHistory = true
+      console.log('IM Store: 重置hasMoreHistory为true')
+    }
+    
+    // 如果已经有消息，仍然需要确保hasMoreHistory状态正确
     if (conversation.messages.length > 0) {
-      console.log('IM Store: 会话已有消息，跳过历史消息初始化')
+      console.log('IM Store: 会话已有消息，但确保hasMoreHistory状态正确')
+      // 不跳过，而是确保状态正确
+      if (conversation.hasMoreHistory === false) {
+        console.log('IM Store: 发现hasMoreHistory为false，重置为true以允许加载更多历史消息')
+        conversation.hasMoreHistory = true
+      }
       return
     }
     
     try {
       console.log('IM Store: 开始加载初始历史消息')
       await loadMessageHistory(sessionId, 20) // 增加初始加载数量
-      console.log('IM Store: 历史消息初始化完成，最终消息数量:', conversation.messages.length)
+      console.log('IM Store: 历史消息初始化完成，最终消息数量:', conversation.messages.length, 'hasMoreHistory:', conversation.hasMoreHistory)
     } catch (error) {
       console.error('IM Store: 初始化历史消息失败:', error)
       conversation.historyError = error instanceof Error ? error.message : '初始化历史消息失败'
+      // 即使失败，也保持hasMoreHistory为true，允许重试
+      conversation.hasMoreHistory = true
     }
   }
 
