@@ -116,16 +116,7 @@ import { ElMessage } from 'element-plus'
 import { ChatDotRound, Loading, Warning } from '@element-plus/icons-vue'
 import { request } from '@/utils/request'
 import type { UserVO } from '@/types/user'
-
-// 会话信息接口
-interface SessionVO {
-  id: string
-  bookId: string
-  buyerId: string
-  sellerId: string
-  sessionStatus: number
-  expireTime: string
-}
+import type { SessionVO } from '@/types/common'
 
 // 路由和状态管理
 const route = useRoute()

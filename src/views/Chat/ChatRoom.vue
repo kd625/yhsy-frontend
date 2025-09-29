@@ -133,9 +133,9 @@ interface ChatMessage {
 
 interface SessionVO {
   id: string
-  bookId: number
-  sellerId: number
-  buyerId: number
+  bookId: string
+  sellerId: string
+  buyerId: string
   expireTime: string
 }
 
@@ -190,7 +190,7 @@ const fetchSessionInfo = async () => {
       }
       
       // 获取对方用户信息
-      const otherUserId = sessionInfo.value.sellerId.toString() === currentUserId.value 
+      const otherUserId = sessionInfo.value.sellerId === currentUserId.value 
         ? sessionInfo.value.buyerId 
         : sessionInfo.value.sellerId
       
@@ -207,7 +207,7 @@ const fetchSessionInfo = async () => {
 }
 
 // 获取图书信息
-const fetchBookInfo = async (bookId: number) => {
+const fetchBookInfo = async (bookId: string) => {
   try {
     const response = await request.get<BaseResponse<Book>>('/book/get', {
       params: { id: bookId }
@@ -222,7 +222,7 @@ const fetchBookInfo = async (bookId: number) => {
 }
 
 // 获取用户信息
-const fetchUserInfo = async (userId: number) => {
+const fetchUserInfo = async (userId: string | number) => {
   try {
     const response = await request.get<BaseResponse<UserVO>>('/user/get', {
       params: { id: userId }
@@ -310,9 +310,9 @@ const fetchMessageHistory = async (startMsgId?: number, isLoadMore = false) => {
         // 如果发送者是当前用户，接收者就是对方用户
         if (senderId === currentUserIdNum) {
           // 从会话信息中获取对方用户ID
-          receiverId = sessionInfo.value?.sellerId === currentUserIdNum 
-            ? Number(sessionInfo.value.buyerId || 0)
-            : Number(sessionInfo.value?.sellerId || 0)
+          receiverId = sessionInfo.value?.sellerId === currentUserId.value 
+            ? Number(sessionInfo.value?.buyerId || '0')
+            : Number(sessionInfo.value?.sellerId || '0')
         } else {
           // 如果发送者不是当前用户，接收者就是当前用户
           receiverId = Number(currentUserIdNum)
@@ -432,9 +432,9 @@ const handleSendMessage = async () => {
 
     // 通过WebSocket发送消息
     if (imStore.isReady) {
-      const receiverId: number = String(sessionInfo.value.sellerId) === currentUserIdStr.value 
-        ? Number(sessionInfo.value.buyerId)
-        : Number(sessionInfo.value.sellerId)
+      const receiverId: number = sessionInfo.value.sellerId === currentUserId.value 
+        ? Number(sessionInfo.value?.buyerId || '0')
+        : Number(sessionInfo.value?.sellerId || '0')
       
       await imStore.sendMessage(
         receiverId.toString(),

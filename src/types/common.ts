@@ -44,6 +44,21 @@ export interface IdRequest {
   id: number
 }
 
+// 会话信息接口 - 统一定义，使用string类型避免精度问题
+export interface SessionVO {
+  id: string              // 会话ID
+  bookId: string          // 关联图书ID
+  buyerId: string         // 买家用户ID
+  sellerId: string        // 卖家用户ID
+  buyerReaded?: number    // 买家是否有未读消息,0-无,1-有
+  sellerReaded?: number   // 卖家是否有未读消息,0-无,1-有
+  sessionStatus: number   // 会话状态: 1-活跃, 2-已过期, 3-已关闭
+  expireTime: string      // 会话过期时间
+  hasUnreadMsg?: boolean  // 是否有未读消息（用于消息图标显示）
+  targetUserAvatar?: string | null  // 目标用户头像
+  userName?: string       // 用户名
+}
+
 // IM历史消息相关类型定义
 
 // 消息分页查询请求参数

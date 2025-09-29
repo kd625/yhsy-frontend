@@ -145,7 +145,7 @@ const getCurrentSessions = async () => {
   try {
     loading.value = true
     const requestData: GetCurUserSessionRequest = {
-      userId: Number(userStore.userInfo?.id) || 0
+      userId: userStore.userInfo?.id || '0'
     }
     const response = await request.post('/im/session/getCurrent', requestData) as SessionCurrentResponse
     
