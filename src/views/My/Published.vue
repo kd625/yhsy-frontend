@@ -277,6 +277,12 @@ const startChat = async (book: Book) => {
       return
     }
 
+    // 检查是否有买家信息
+    if (!book.buyerId) {
+      ElMessage.error('无法获取买家信息，无法开始聊天')
+      return
+    }
+
     // 初始化IM客户端（如果还没有初始化）
     if (!imStore.client) {
       imStore.initialize(userStore.token)
@@ -286,14 +292,14 @@ const startChat = async (book: Book) => {
     if (!imStore.isReady) {
       await imStore.connectIM()
     }
-    
+
     // 调用后端接口开始会话
     const response = await request.post('/im/session/startChat', {
       bookId: book.id,
       buyerId: book.buyerId,
       sellerId: userStore.userInfo?.id
     })
-    
+
     if (response.code === 0) {
       const sessionVO = response.data
       // 跳转到聊天页面，通过路由状态传递SessionVO信息

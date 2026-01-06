@@ -309,27 +309,29 @@ const handleStartChat = async () => {
 
   try {
     chatLoading.value = true
-    
+
     // 调用开始聊天接口
+    // 当前用户是买家，需要传递当前用户ID作为buyerId
     const response = await request.post<BaseResponse<any>>('/im/session/startChat', {
       bookId: book.value.id,
+      buyerId: userStore.userInfo.id,
       sellerId: book.value.sellerId
     })
 
     if (response.data.code === 0) {
       const sessionVO = response.data.data
-      
+
       // 检查会话是否过期
       const currentTime = new Date().getTime()
       const expireTime = new Date(sessionVO.expireTime).getTime()
-      
+
       if (currentTime > expireTime) {
         // 会话已过期
         sessionExpired.value = true
         ElMessage.warning('会话已过期')
         return
       }
-      
+
       // 会话有效，跳转到聊天界面
       router.push({
         path: '/chat',
