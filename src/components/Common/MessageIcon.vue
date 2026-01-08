@@ -141,11 +141,11 @@ const getCurrentSessions = async () => {
   if (!userStore.isLogin) {
     return
   }
-  
+
   try {
     loading.value = true
     const requestData: GetCurUserSessionRequest = {
-      userId: Number(userStore.userInfo?.id) || 0
+      userId: String(userStore.userInfo?.id || '')
     }
     const response = await request.post('/im/session/getCurrent', requestData) as SessionCurrentResponse
     

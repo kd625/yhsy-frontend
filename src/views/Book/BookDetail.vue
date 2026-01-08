@@ -309,11 +309,12 @@ const handleStartChat = async () => {
 
   try {
     chatLoading.value = true
-    
+
     // 调用开始聊天接口
     const response = await request.post<BaseResponse<any>>('/im/session/startChat', {
       bookId: book.value.id,
-      sellerId: book.value.sellerId
+      sellerId: book.value.sellerId,
+      buyerId: userStore.userInfo.id
     })
 
     if (response.data.code === 0) {
